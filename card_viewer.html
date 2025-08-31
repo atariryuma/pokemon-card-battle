@@ -1253,8 +1253,10 @@
                 }
                 updatePreview();
                 resolve(result);
-                return;
+              } else {
+                reject(new Error('API upload failed: CardAPI.uploadImage did not return a valid path.'));
               }
+              return; // APIを使った場合はここで処理を終了
             }
             
             // Fallback to file system API
@@ -1310,7 +1312,12 @@
             canvas.height = img.height;
             ctx.drawImage(img, 0, 0);
             
-            canvas.toBlob(processAndSave, 'image/webp', 0.9);
+            canvas.toBlob((blob) => {
+              if (!blob) {
+                return reject(new Error('Canvas to Blob conversion failed. The image might be empty or too large.'));
+              }
+              processAndSave(blob);
+            }, 'image/webp', 0.9);
           };
           
           img.onerror = () => reject(new Error('Image load failed'));

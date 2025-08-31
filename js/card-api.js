@@ -83,19 +83,22 @@
       reader.readAsDataURL(file);
     });
     
-    const p = (fileOrData && typeof fileOrData !== 'string' && fileOrData.name)
-      ? toDataUrl(fileOrData).then(data => ({ 
-          filename: opts.filename || fileOrData.name, 
+    let p;
+    if (fileOrData instanceof Blob) { // Covers File and Blob
+      p = toDataUrl(fileOrData).then(data => ({ 
+          filename: opts.filename || fileOrData.name || 'image.webp', 
           data,
           cardType: opts.cardType,
           cardId: opts.cardId
-        }))
-      : Promise.resolve({ 
+        }));
+    } else {
+      p = Promise.resolve({ 
           filename: opts.filename || 'image', 
           data: String(fileOrData || ''),
           cardType: opts.cardType,
           cardId: opts.cardId
         });
+    }
         
     return p.then(payload => fetch(`${BASE}/api/images`, {
       method: 'POST',

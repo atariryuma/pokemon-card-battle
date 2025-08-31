@@ -96,9 +96,13 @@
   {
     "id": "003",
     "name_en": "Glasswing Butterfly Larva",
-    "name_ja": "イシガケチョウ 幼虫",
+    "name_ja": "イシガケチョウ 幼虫 2",
     "card_type": "Pokemon",
     "stage": "Basic",
+    "evolves_to": [
+      "Glasswing Butterfly Larva 2",
+      "Glasswing Butterfly"
+    ],
     "hp": 30,
     "types": [
       "Grass"
@@ -130,7 +134,7 @@
           "Lightning",
           "Colorless"
         ],
-        "damage": 0,
+        "damage": 50,
         "text_en": "Reduce the opponent's next attack by 50.",
         "text_ja": "相手の次の攻撃を50小さくする。"
       }
@@ -143,6 +147,10 @@
     "name_ja": "イシガケチョウ 幼虫 2",
     "card_type": "Pokemon",
     "stage": "Stage1",
+    "evolves_from": "Glasswing Butterfly Larva",
+    "evolves_to": [
+      "Glasswing Butterfly"
+    ],
     "hp": 50,
     "types": [
       "Grass"
@@ -187,8 +195,9 @@
     "id": "005",
     "name_en": "Glasswing Butterfly",
     "name_ja": "イシガケチョウ",
-    "card_type": "Pokemon",
-    "stage": "Stage2",
+    "card_type": "Pokémon",
+    "stage": "STAGE2",
+    "evolves_from": "Glasswing Butterfly Larva 2",
     "hp": 70,
     "types": [
       "Grass"
@@ -206,8 +215,8 @@
     "retreat_cost": 1,
     "attacks": [
       {
-        "name_en": "Gust",
         "name_ja": "風をおこす",
+        "name_en": "Gust",
         "cost": [
           "Grass",
           "Colorless"
@@ -215,16 +224,16 @@
         "damage": 30
       },
       {
-        "name_en": "Nectar Sip",
         "name_ja": "蜜を吸う",
+        "name_en": "Nectar Sip",
         "cost": [
           "Grass",
           "Colorless",
           "Colorless"
         ],
         "damage": 60,
-        "text_en": "Heal 50 HP from this Pokémon.",
-        "text_ja": "自分のHPを50回ふくする。"
+        "text_ja": "自分のHPを50回ふくする。",
+        "text_en": "Heal 50 HP from this Pokémon."
       }
     ],
     "image_file": "005_pokemon_glasswing_butterfly.webp"
@@ -233,8 +242,8 @@
     "id": "006",
     "name_en": "Kobane Inago",
     "name_ja": "コバネイナゴ",
-    "card_type": "Pokémon",
-    "stage": "BASIC",
+    "card_type": "Pokemon",
+    "stage": "Basic",
     "hp": 50,
     "types": [
       "Grass"
@@ -258,8 +267,8 @@
     },
     "attacks": [
       {
-        "name_ja": "突撃",
         "name_en": "Charge",
+        "name_ja": "突撃",
         "cost": [
           "Fire"
         ],
