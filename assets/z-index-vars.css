@@ -1,47 +1,56 @@
 :root {
-    /* === Z-Index レイヤー管理 === */
+    /* === Z-Index レイヤー管理（論理的階層版） === */
+    /* 背景・基盤レイヤー (0-99) */
     --z-board-bg: 0;
     --z-board: 10;
-    --z-placeholder: 15;
-    --z-slots: 20;
-    --z-deck-effects: 50;
-    --z-side-stack-1: 55;
-    --z-side-stack-2: 60;
-    --z-side-stack-3: 65;
-    --z-deck-hover: 70;
-    --z-card: 90;
-    --z-card-hover: 100;
-    --z-card-effects: 110;
-    --z-highlight: 120;
-    --z-cpu-hand-base: 150;
-    --z-cpu-hand-fan: 160;
-    --z-hand-area: 200;
-    --z-hand: 210;
-    --z-hand-hover: 230;
-    --z-animations: 300;
-    --z-selected: 320;
-    --z-placeholder-hover: 330;
-    --z-hud-base: 400;
-    --z-floating-hud: 420;
-    --z-panels: 450;
-    --z-toast: 480;
-    --z-modals: 600;
-    --z-critical: 700;
-
-    /* === 3D Transform Z-Depth === */
-    --tz-card-slot: 1px;
-    --tz-damage-counter: 2px;
-    --tz-card-image-base: 0px;
-    --tz-game-board: -200px;     /* プレイマット下地をさらに奥に */
+    --z-deck-effects: 30;
     
-    /* === フィールド3D配置 === */
-    --tz-player-field: 5px;        /* プレイヤーフィールド - 最前面 */
-    --tz-player-slots: 6px;        /* プレイヤースロット - フィールドより前 */
-    --tz-opponent-field: 1px;      /* 相手フィールド - 奥に配置 */
-    --tz-opponent-slots: 2px;      /* 相手スロット - フィールドより前だが手前ではない */
+    /* ゲームボード・カードスロットレイヤー (100-199) */
+    --z-card-slot: 100;
+    --z-placeholder: 105;
+    --z-card: 110;
+    --z-card-hover: 120;
+    --z-highlight: 130;
+    --z-selected: 140;
+    --z-animations: 150;
+    
+    /* 手札・プレイヤー操作レイヤー (300-499) */
+    --z-cpu-hand-base: 300;
+    --z-hand-area: 350;
+    --z-hand: 360;
+    --z-hand-hover: 370;
+    
+    /* UI・インターフェースレイヤー (500-699) */
+    --z-hud-base: 500;
+    --z-floating-hud: 510;
+    --z-panels: 520;
+    
+    /* システム・モーダルレイヤー (700+) */
+    --z-toast: 700;
+    --z-modals: 800;
+    --z-critical: 900;
+
+    /* === 3D Transform Z-Depth（論理的階層） === */
+    --tz-game-board: -120px;       /* プレイマット基盤 */
+    --tz-card-image-base: 0px;     /* 基準点 */
+    
+    /* === フィールド3D配置（論理的順序） === */
+    --tz-opponent-field: 10px;     /* 相手フィールド - 奥 */
+    --tz-opponent-slots: 15px;     /* 相手スロット */
+    --tz-card-slot: 20px;          /* 基本カードスロット */
+    --tz-player-field: 40px;       /* プレイヤーフィールド - 最前面 */
+    --tz-player-slots: 50px;       /* プレイヤースロット - 最前面 */
+    --tz-damage-counter: 60px;     /* ダメージカウンター - 最前面 */
 
     /* === レスポンシブレイアウト === */
     --viewport-padding: clamp(8px, 1vw, 16px);
     --hand-height: clamp(100px, 18vh, 160px);
     --card-size-ratio: clamp(0.6, 1.2vw, 1.0);
+    
+    /* === パフォーマンス最適化 === */
+    --gpu-layer: translateZ(0);
+    --anim-fast: 0.15s;
+    --anim-normal: 0.3s;
+    --anim-slow: 0.6s;
+    --cubic-bezier: cubic-bezier(0.4, 0, 0.2, 1);
 }

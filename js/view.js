@@ -58,44 +58,21 @@ export class View {
             gameLogger.logGameEvent('ERROR', 'プレイヤー手札要素が見つかりません');
         }
         
-        // プレイマットのクリック・ホバー判定
+        // 統合されたゲームボードイベント委譲（最適化版）
         const gameBoard = document.getElementById('game-board');
         if (gameBoard) {
-            gameBoard.addEventListener('click', (e) => gameLogger.logClickEvent(e.target));
-            gameBoard.addEventListener('mouseenter', (e) => gameLogger.logHoverEvent(e.target, true));
-            gameBoard.addEventListener('mouseleave', (e) => gameLogger.logHoverEvent(e.target, false));
-        }
-        
-        // 相手フィールドの個別イベントリスナー追加
-        const opponentBoard = document.querySelector('.opponent-board');
-        const cpuBoard = document.getElementById('cpu-board');
-        
-        if (opponentBoard) {
-            opponentBoard.addEventListener('click', (e) => {
-                e.stopPropagation();
-                gameLogger.logClickEvent(e.target, '相手フィールドクリック');
+            // 単一のクリックハンドラーで全てを処理
+            gameBoard.addEventListener('click', this._handleUnifiedBoardClick.bind(this));
+            gameBoard.addEventListener('mouseenter', this._handleUnifiedBoardHover.bind(this), true);
+            gameBoard.addEventListener('mouseleave', this._handleUnifiedBoardHover.bind(this), true);
+            
+            // キーボードナビゲーション対応
+            gameBoard.addEventListener('keydown', this._handleKeyboardNavigation.bind(this), {
+                capture: false,
+                passive: false
             });
-            opponentBoard.addEventListener('mouseenter', (e) => {
-                gameLogger.logHoverEvent(e.target, true);
-            });
-            opponentBoard.addEventListener('mouseleave', (e) => {
-                gameLogger.logHoverEvent(e.target, false);
-            });
-            gameLogger.logGameEvent('INFO', '相手フィールドのクリック・ホバー判定を有効化');
-        }
-        
-        if (cpuBoard && cpuBoard !== opponentBoard) {
-            cpuBoard.addEventListener('click', (e) => {
-                e.stopPropagation();
-                gameLogger.logClickEvent(e.target, 'CPUボードクリック');
-            });
-            cpuBoard.addEventListener('mouseenter', (e) => {
-                gameLogger.logHoverEvent(e.target, true);
-            });
-            cpuBoard.addEventListener('mouseleave', (e) => {
-                gameLogger.logHoverEvent(e.target, false);
-            });
-            gameLogger.logGameEvent('INFO', 'CPUボードのクリック・ホバー判定を有効化');
+            
+            gameLogger.logGameEvent('INFO', '統合ゲームボードイベント委譲とアクセシビリティ機能を有効化');
         }
 
         // レイヤー競合の解決: CPU手札と相手フィールドのz-index関係を検証
@@ -237,6 +214,57 @@ export class View {
         // 従来システムも併用（互換性のため）
         this.clearInteractiveButtons();
         this.hideGameMessage();
+    }
+
+    /**
+     * 統合されたゲームボードクリックハンドラー
+     * @param {Event} e - クリックイベント
+     */
+    _handleUnifiedBoardClick(e) {
+        // イベント伝播は制御せず、適切なターゲットを特定
+        const target = e.target;
+        const cardSlot = target.closest('.card-slot');
+        
+        if (cardSlot) {
+            gameLogger.logClickEvent(cardSlot, 'カードスロット');
+            // 既存のカードクリックハンドラーに委譲
+            if (this.cardClickHandler) {
+                const zone = cardSlot.dataset.zone;
+                const owner = cardSlot.closest('.player-self') ? 'player' : 'cpu';
+                this.cardClickHandler({
+                    owner,
+                    zone,
+                    element: cardSlot,
+                    originalEvent: e
+                });
+            }
+        } else {
+            gameLogger.logClickEvent(target, 'ゲームボード一般');
+        }
+    }
+
+    /**
+     * 統合されたゲームボードホバーハンドラー
+     * @param {Event} e - ホバーイベント
+     */
+    _handleUnifiedBoardHover(e) {
+        const isEnter = e.type === 'mouseenter';
+        gameLogger.logHoverEvent(e.target, isEnter);
+    }
+
+    /**
+     * キーボードナビゲーションハンドラー
+     * @param {KeyboardEvent} e - キーボードイベント
+     */
+    _handleKeyboardNavigation(e) {
+        // 基本的なキーボードナビゲーション実装
+        if (e.key === 'Enter' || e.key === ' ') {
+            const target = e.target;
+            if (target.classList.contains('card-slot')) {
+                e.preventDefault();
+                this._handleUnifiedBoardClick(e);
+            }
+        }
     }
 
     /**
@@ -1636,6 +1664,11 @@ export class View {
             slotElement.style.cursor = hasCard ? 'help' : 'pointer';
         }
 
+        // アクセシビリティ属性を追加
+        slotElement.setAttribute('role', 'button');
+        slotElement.setAttribute('tabindex', '0');
+        slotElement.setAttribute('aria-label', `${zone} スロット ${index + 1} - クリックしてカードを配置`);
+        
         // シンプルなクリック処理（プレイヤー側の操作 + CPU側の情報表示）
         slotElement.addEventListener('click', (e) => {
             e.preventDefault();
@@ -1653,6 +1686,19 @@ export class View {
             };
             
             this.cardClickHandler(dataset);
+        });
+        
+        // キーボードナビゲーション対応
+        slotElement.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                const syntheticEvent = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window
+                });
+                slotElement.dispatchEvent(syntheticEvent);
+            }
         });
 
         // ドロップ処理（プレイヤー側のスロットのみ）
