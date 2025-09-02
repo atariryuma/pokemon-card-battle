@@ -204,7 +204,7 @@ export function attachEnergy(state, player, energyId, pokemonId) {
     const playerState = state.players[player];
 
     // Check if energy can be attached
-    if (state.hasAttachedEnergyThisTurn) {
+    if (state.turnState.energyAttached > 0) {
         let newState = addLogEntry(state, { message: `${player === 'player' ? 'あなた' : '相手'}はすでにこのターンにエネルギーを付けている。` });
         return newState;
     }
@@ -242,7 +242,6 @@ export function attachEnergy(state, player, energyId, pokemonId) {
 
     let newState = {
         ...state,
-        hasAttachedEnergyThisTurn: true,
         players: {
             ...state.players,
             [player]: {
@@ -665,8 +664,8 @@ export function checkForWinner(state) {
     }
 
     // Check if a player has no pokemon left in play (active or bench)
-    const isPlayerOutOfPokemon = !state.players.player.active && state.players.player.bench.every(p => p === null);
-    const isCpuOutOfPokemon = !state.players.cpu.active && state.players.cpu.bench.every(p => p === null);
+    const isPlayerOutOfPokemon = !state.players.player.active && state.players.player.bench.every(p => !p);
+    const isCpuOutOfPokemon = !state.players.cpu.active && state.players.cpu.bench.every(p => !p);
 
     if (isPlayerOutOfPokemon) {
         newState = addLogEntry(newState, { message: '🏆 相手の勝利！あなたがポケモンを出せなくなった！' });

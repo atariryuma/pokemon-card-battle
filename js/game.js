@@ -42,12 +42,6 @@ export class Game {
         this.prizeAnimationCompleted = false; // サイドアニメーション完了フラグ
         this.cardRevealAnimationExecuted = false;
         
-        // Prize animation status tracking (separated for player and CPU)
-        this.prizeAnimationStatus = {
-            player: false,  // プレイヤー側サイド配布完了
-            cpu: false      // CPU側サイド配布完了
-        };
-        
         // レンダリング最適化用
         this.renderQueue = [];
         this.isRenderScheduled = false;
@@ -118,11 +112,13 @@ export class Game {
         this.prizeAnimationCompleted = false;
         this.cardRevealAnimationExecuted = false;
         
-        // Reset prize animation status
-        this.prizeAnimationStatus = {
-            player: false,
-            cpu: false
-        };
+        // Reset prize animation status in state
+        if (this.state) {
+            this.state.prizeAnimationStatus = {
+                player: false,
+                cpu: false
+            };
+        }
         
         noop('🔄 Animation flags reset');
     }
@@ -1087,7 +1083,7 @@ export class Game {
      * エネルギーカードのドロップ処理
      */
     async _handleEnergyDrop(cardId, targetZone, targetIndex) {
-        if (this.state.hasAttachedEnergyThisTurn) {
+        if (this.state.turnState.energyAttached > 0) {
             this.view.showErrorMessage('このターンはすでにエネルギーを付けています', 'warning');
             return;
         }
@@ -1266,7 +1262,7 @@ export class Game {
      */
     async _handlePlayerDraw() {
         // 既存のドロー制限チェック
-        if (this.state.hasDrawnThisTurn || this.state.turnState?.hasDrawn) {
+        if (this.state.turnState?.hasDrawn) {
             this.state = addLogEntry(this.state, { message: 'このターンはすでにカードを引いています。' });
             this.view.showError('ALREADY_DRAWN_CARD');
             return;
@@ -1386,15 +1382,6 @@ export class Game {
                 // If CPU needs to auto-select, handle it immediately  
                 if (newState.needsCpuAutoSelect) {
                     newState = await this.turnManager.handleCpuAutoNewActive(newState);
-                    
-                    // Set appropriate phase after CPU auto-selection
-                    if (newState.phase !== GAME_PHASES.GAME_OVER) {
-                        if (newState.turnPlayer === 'cpu') {
-                            newState.phase = GAME_PHASES.CPU_MAIN;
-                        } else {
-                            newState.phase = GAME_PHASES.PLAYER_MAIN;
-                        }
-                    }
                 }
             } else {
                 // No knockout context, return to normal turn flow
@@ -1405,7 +1392,7 @@ export class Game {
                 }
             }
         }
-        if (newState.turnPlayer === 'cpu' && newState.phase !== GAME_PHASES.GAME_OVER) {
+        if (newState.turnPlayer === 'cpu' && newState.phase !== GAME_PHASES.GAME_OVER && newState.phase !== GAME_PHASES.AWAITING_NEW_ACTIVE) {
             // プレイヤーと同様にサイド取得後はターンを終了し、次のプレイヤーターンへ移行
             const postState = await this.turnManager.endCpuTurn(newState);
             return postState;
@@ -1475,6 +1462,13 @@ export class Game {
         
         console.log('✅ Prize card taken successfully, remaining:', newState.players[playerId].prizesToTake);
         this._updateState(newState);
+
+        // きぜつ後の処理でCPUターンに移行した場合、CPUの行動を開始する
+        if (newState.turnPlayer === 'cpu' && (newState.phase === GAME_PHASES.CPU_TURN || newState.phase === GAME_PHASES.CPU_DRAW)) {
+            setTimeout(async () => {
+                await this._executeCpuTurn();
+            }, 1000);
+        }
     }
 
     /**
@@ -1664,7 +1658,7 @@ export class Game {
             );
         } else if (card.card_type === 'Basic Energy' || card.card_type === 'Energy') {
             // エネルギーを付ける
-            if (this.state.hasAttachedEnergyThisTurn) {
+            if (this.state.turnState.energyAttached > 0) {
                 this.state = addLogEntry(this.state, { message: 'このターンはすでにエネルギーをつけました。' });
                 this.view.showErrorMessage('このターンはすでにエネルギーをつけました。', 'warning');
                 return;
@@ -2681,7 +2675,7 @@ export class Game {
             return;
         }
 
-        if (!this.state.canRetreat) {
+        if (!this.state.turnState.canRetreat) {
             this.state = addLogEntry(this.state, { message: 'このターンはすでににげました。' });
             this.view.showErrorMessage('このターンはすでににげました。', 'warning');
             return;
@@ -2934,7 +2928,7 @@ export class Game {
         const active = playerState.active;
         
         if (!active || playerState.bench.length === 0) return false;
-        if (this.state.hasRetreatedThisTurn || this.state.canRetreat === false) return false;
+        if (!this.state.turnState.canRetreat) return false;
         
         const retreatCost = active.retreat_cost || 0;
         const attachedEnergy = active.attached_energy || [];
@@ -3078,7 +3072,7 @@ export class Game {
         noop('✅ Player prize card animation completed');
         
         // プレイヤー側アニメーション完了をマーク
-        this.prizeAnimationStatus.player = true;
+        this.state.prizeAnimationStatus.player = true;
         
         // 両者準備完了チェック（setup-manager経由）
         this.setupManager._checkBothPlayersReady();
@@ -3121,9 +3115,6 @@ export class Game {
         }
         
         // 3. ターン制約をリセット (ドロー以外のもの)
-        newState.hasAttachedEnergyThisTurn = false;
-        newState.canRetreat = true;
-        newState.canPlaySupporter = true;
 
         // 4. プレイヤーのドローフェーズに移行（手動ドロー）
         newState.phase = GAME_PHASES.PLAYER_DRAW;
@@ -3394,7 +3385,7 @@ export class Game {
             } catch (e) {
                 console.error('Prize animation failed:', e);
             }
-            this.prizeAnimationStatus.cpu = true;
+            this.state.prizeAnimationStatus.cpu = true;
             noop('✅ CPU prize card animation completed');
             
             // CPU側完了後の状態更新
@@ -3426,7 +3417,7 @@ export class Game {
      * 両方のサイドアニメーション完了チェック
      */
     _checkBothPrizeAnimationsComplete() {
-        const { player, cpu } = this.prizeAnimationStatus;
+        const { player, cpu } = this.state.prizeAnimationStatus;
         
         noop('🔍 Checking prize animations completion:', { player, cpu });
         

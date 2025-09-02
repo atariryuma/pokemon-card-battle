@@ -4,6 +4,8 @@
  * game_sequence.mdで定義されたフェーズシーケンスを管理
  */
 
+import { hasEnoughEnergy } from './logic.js';
+
 /**
  * ゲームフェーズの定義
  */
@@ -130,30 +132,10 @@ export class PhaseManager {
     
     if (!activePokemon || !activePokemon.attacks) return false;
     
-    // 使用可能な攻撃があるかチェック（ここではLogic.hasEnoughEnergyを使用する想定）
+    // 使用可能な攻撃があるかチェック
     return activePokemon.attacks.some(attack => 
-      this.hasEnoughEnergyForAttack(activePokemon, attack)
+      hasEnoughEnergy(activePokemon, attack)
     );
-  }
-
-  /**
-   * エネルギーチェックのヘルパー（Logic.jsから移植）
-   * TODO: Logic.jsのhasEnoughEnergyを使用するように修正
-   */
-  hasEnoughEnergyForAttack(pokemon, attack) {
-    const attached = (pokemon.attached_energy || []).map(e => e.energy_type);
-    const cost = [...attack.cost];
-
-    for (let i = attached.length - 1; i >= 0; i--) {
-      const energyType = attached[i];
-      const costIndex = cost.findIndex(c => c === energyType || c === 'Colorless');
-      if (costIndex !== -1) {
-        cost.splice(costIndex, 1);
-        attached.splice(i, 1);
-      }
-    }
-    
-    return cost.length === 0 || (cost.every(c => c === 'Colorless') && attached.length >= cost.length);
   }
 
   /**

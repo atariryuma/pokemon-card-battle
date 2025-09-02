@@ -458,14 +458,14 @@ export class View {
         
         if (this.renderRegions.playerActive.dirty || this.renderRegions.playerBench.dirty) {
             this._clearBoardArea(this.playerBoard);
-            this._renderBoard(this.playerBoard, state.players.player, 'player');
+            this._renderBoard(this.playerBoard, state.players.player, 'player', state);
             this.renderRegions.playerActive.dirty = false;
             this.renderRegions.playerBench.dirty = false;
         }
         
         if (this.renderRegions.cpuActive.dirty || this.renderRegions.cpuBench.dirty) {
             this._clearBoardArea(this.opponentBoard);
-            this._renderBoard(this.opponentBoard, state.players.cpu, 'cpu');
+            this._renderBoard(this.opponentBoard, state.players.cpu, 'cpu', state);
             this.renderRegions.cpuActive.dirty = false;
             this.renderRegions.cpuBench.dirty = false;
         }
@@ -548,7 +548,7 @@ export class View {
         if (this.cpuHand) this.cpuHand.innerHTML = '';
     }
     
-    _renderBoard(boardElement, playerState, playerType) {
+    _renderBoard(boardElement, playerState, playerType, fullState) {
         if (!boardElement) return;
 
         const safePlayer = playerState || {};
@@ -591,7 +591,7 @@ export class View {
         }
 
         // Prizes - 側ごとのアニメ進捗に応じて表示
-        if (this._shouldRenderPrizes(playerType)) {
+        if (this._shouldRenderPrizes(playerType, fullState.prizeAnimationStatus)) {
             this._renderPrizeArea(boardElement, prize, playerType);
         }
 
@@ -968,9 +968,9 @@ export class View {
     /**
      * サイドカードをレンダリングすべきかどうかを判定
      */
-    _shouldRenderPrizes(playerType) {
+    _shouldRenderPrizes(playerType, prizeAnimationStatus) {
         // 新方式: 側ごとのアニメ完了フラグで制御
-        const status = window.game?.prizeAnimationStatus;
+        const status = prizeAnimationStatus;
         if (!status) return true;
         if (playerType === 'player') return !!status.player;
         if (playerType === 'cpu') return !!status.cpu;

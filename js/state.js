@@ -99,15 +99,10 @@ export function createInitialState() {
             hasDrawn: false,              // ターン内ドロー済みフラグ
             energyAttached: 0,            // ターン内エネルギー付与数
             turnNumber: 1,                // ターン番号
-            canRetreat: true,             // にげる可能フラグ
-            canPlaySupporter: true        // サポート使用可能フラグ
+            canRetreat: true              // にげる可能フラグ
         },
         
         // Legacy turn constraints (互換性のため一時保持)
-        hasDrawnThisTurn: false,
-        hasAttachedEnergyThisTurn: false,
-        canRetreat: true,
-        canPlaySupporter: true,
         
         // Special states
         pendingAction: null,
@@ -141,6 +136,12 @@ export function createInitialState() {
         // Win conditions
         winner: null,
         gameEndReason: null,
+
+        // Animation-related state
+        prizeAnimationStatus: {
+            player: false,
+            cpu: false
+        },
     };
 }
 

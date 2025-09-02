@@ -74,15 +74,10 @@ export class TurnManager {
       hasDrawn: false,
       energyAttached: 0,
       turnNumber: newState.turnState?.turnNumber || 1,
-      canRetreat: true,
-      canPlaySupporter: true
+      canRetreat: true
     };
 
     // Legacy ターン制約リセット（互換性のため）
-    newState.hasDrawnThisTurn = false;
-    newState.hasAttachedEnergyThisTurn = false;
-    newState.canRetreat = true;
-    newState.canPlaySupporter = true;
     newState.turnPlayer = 'player';
 
     // 特殊状態処理（毒、火傷など）
@@ -112,9 +107,9 @@ export class TurnManager {
     let newState = cloneGameState(state);
 
     // 自動ドロー（最初のターンのみ選択制、以降は強制）
-    if (!newState.hasDrawnThisTurn) {
+    if (!state.turnState.hasDrawn) {
       newState = Logic.drawCard(newState, 'player');
-      newState.hasDrawnThisTurn = true;
+      newState.turnState.hasDrawn = true;
 
       // ドローアニメーション
       await this.animateCardDraw('player');
@@ -194,7 +189,7 @@ export class TurnManager {
    * エネルギー付与処理
    */
   handleAttachEnergy(state, { energyId, pokemonId }) {
-    if (state.hasAttachedEnergyThisTurn) {
+    if (state.turnState.energyAttached > 0) {
       console.warn('Already attached energy this turn');
       return state;
     }
@@ -202,6 +197,7 @@ export class TurnManager {
     let newState = Logic.attachEnergy(state, 'player', energyId, pokemonId);
     
     if (newState !== state) {
+      newState.turnState.energyAttached = 1;
       newState = addLogEntry(newState, {
         type: 'energy_attached',
         player: 'player',
@@ -232,7 +228,7 @@ export class TurnManager {
    * にげる処理
    */
   handleRetreat(state, { fromActiveId, toBenchIndex }) {
-    if (!state.canRetreat) {
+    if (!state.turnState.canRetreat) {
       console.warn('Cannot retreat this turn');
       return state;
     }
@@ -241,6 +237,7 @@ export class TurnManager {
     
     if (newState !== state) {
       newState.canRetreat = false;
+      newState.turnState.canRetreat = false;
       newState = addLogEntry(newState, {
         type: 'pokemon_retreated',
         player: 'player',
@@ -265,16 +262,7 @@ export class TurnManager {
     if (!activePokemon || !activePokemon.attacks) return false;
     
     // 使用可能な攻撃があるかチェック
-    return activePokemon.attacks.some(attack => {
-      // Logic.jsの関数を使用してエネルギーチェック（import必要）
-      try {
-        const Logic = require('./logic.js');
-        return Logic.hasEnoughEnergy(activePokemon, attack);
-      } catch (error) {
-        // Logic.jsが利用できない場合の簡易チェック
-        return true; // 一時的にtrue
-      }
-    });
+    return activePokemon.attacks.some(attack => Logic.hasEnoughEnergy(activePokemon, attack));
   }
 
   /**
@@ -479,15 +467,10 @@ export class TurnManager {
       hasDrawn: false,
       energyAttached: 0,
       turnNumber: newState.turnState.turnNumber + 1, // ターン番号のみ増加
-      canRetreat: true,
-      canPlaySupporter: true
+      canRetreat: true
     };
 
     // Legacy フラグもリセット（互換性のため）
-    newState.hasDrawnThisTurn = false;
-    newState.hasAttachedEnergyThisTurn = false;
-    newState.canRetreat = true;
-    newState.canPlaySupporter = true;
 
     newState.phase = GAME_PHASES.CPU_TURN;
     newState.turnPlayer = 'cpu';
@@ -512,11 +495,16 @@ export class TurnManager {
     // ターン数増加
     newState.turn++;
 
-    // ターン制約リセット
-    newState.hasDrawnThisTurn = false;
-    newState.hasAttachedEnergyThisTurn = false;
-    newState.canRetreat = true;
-    newState.canPlaySupporter = true;
+    // ターンステートをリセット
+    newState.turnState = {
+      hasAttacked: false,
+      hasDrawn: false,
+      energyAttached: 0,
+      turnNumber: newState.turnState?.turnNumber || 1,
+      canRetreat: true
+    };
+
+    // Legacy ターン制約リセット（互換性のため）
     newState.turnPlayer = 'cpu';
 
     // 特殊状態処理
@@ -785,7 +773,7 @@ export class TurnManager {
    */
   async cpuAttachEnergy(state) {
     let newState = cloneGameState(state);
-    if (newState.hasAttachedEnergyThisTurn) {
+    if (newState.turnState.energyAttached > 0) {
       return newState;
     }
 
@@ -956,7 +944,7 @@ export class TurnManager {
     let newState = cloneGameState(state);
     const { active, bench } = newState.players.cpu;
 
-    if (!active || !newState.canRetreat) {
+    if (!active || !state.turnState.canRetreat) {
       return newState;
     }
 
@@ -981,6 +969,7 @@ export class TurnManager {
           // アニメーションなどをここに追加可能
           await this.simulateCpuThinking(600);
           retreatedState.canRetreat = false; // にげるは1ターンに1回
+          retreatedState.turnState.canRetreat = false;
           return retreatedState;
         }
       }
