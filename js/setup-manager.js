@@ -4,8 +4,9 @@
  * 初期ポケモン選択、マリガン、サイドカード配置などを管理
  */
 
-// アニメーションは flow に統一
+// アニメーションは flow に統一（一部レガシーAPIも使用）
 import { animateFlow } from './animations/flow.js';
+import { animate, animationManager } from './animation-manager.js';
 import { GAME_PHASES } from './phase-manager.js';
 import { cloneGameState, addLogEntry } from './state.js';
 import * as Logic from './logic.js';

@@ -374,25 +374,22 @@ export const animate = new AnimationManager();
 
 // 後方互換性のための旧API
 export const animationManager = {
-    // 旧メソッドを新APIにリダイレクト
-    animateDrawCard: (element) => animate.card.deckToHand('player', null, { element }),
-    animateDamage: (element) => animate.combat.damage(50, null, { element }),
-    createUnifiedKnockoutAnimation: (playerId, pokemonId) => animate.knockout(pokemonId),
-    animateScreenShake: (intensity) => animate.combat.screenShake(intensity),
-    
-    // 手札エントリー
-    animateHandEntry: (cards) => animate.handDeal(cards, 'player'),
-    
-    // 手札配布
-    animateHandDeal: (cards, playerId) => animate.handDeal(cards, playerId),
-    
-    // カードドロー
+    // 旧メソッドを新APIにリダイレクト（カードドロー）
     animateDrawCard: (element) => {
         if (element) {
             return animate.cardDraw('player', element);
         }
         return animate.card.deckToHand('player', null, { element });
     },
+    animateDamage: (element) => animate.combat.damage(50, null, { element }),
+    createUnifiedKnockoutAnimation: (playerId, pokemonId) => animate.knockout(pokemonId),
+    animateScreenShake: (intensity) => animate.combat.screenShake(intensity),
+
+    // 手札エントリー
+    animateHandEntry: (cards) => animate.handDeal(cards, 'player'),
+
+    // 手札配布
+    animateHandDeal: (cards, playerId) => animate.handDeal(cards, playerId),
     
     // メッセージアニメーション
     animateMessage: (element) => animate.ui.notification(element?.textContent || 'メッセージ', 'info'),

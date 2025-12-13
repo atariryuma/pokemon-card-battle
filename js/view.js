@@ -41,9 +41,8 @@ export class View {
         // Hand containers
         this.playerHand = document.getElementById('player-hand');
         this.cpuHand = document.getElementById('cpu-hand');
-        
-        // CPU手札を更新（プレイマット統合済み）
-        this.cpuHand = document.getElementById('cpu-hand');
+
+        // CPU手札にスケーリングクラスを追加（プレイマット統合済み）
         if (this.cpuHand) {
             this.cpuHand.classList.add('cpu-hand-scaling');
         }

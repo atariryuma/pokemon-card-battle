@@ -233,8 +233,9 @@ export class TurnManager {
       return state;
     }
 
-    let newState = Logic.retreat(state, 'player', fromActiveId, toBenchIndex);
-    
+    const result = Logic.retreat(state, 'player', fromActiveId, toBenchIndex);
+    let newState = result.newState;
+
     if (newState !== state) {
       newState.canRetreat = false;
       newState.turnState.canRetreat = false;

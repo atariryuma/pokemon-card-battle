@@ -395,10 +395,7 @@ export function hasEnoughEnergy(pokemon, attack) {
             attached.splice(i, 1); // Each energy can only be used once
         }
     }
-    // Check remaining cost against remaining colorless energy
-    const colorlessEnergyCount = attached.filter(e => e === 'Colorless').length;
-    const colorlessCostCount = cost.filter(c => c === 'Colorless').length;
-
+    // コストが0または残りが全て無色で、付いているエネルギーが足りればOK
     return cost.length === 0 || (cost.every(c => c === 'Colorless') && attached.length >= cost.length);
 }
 

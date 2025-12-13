@@ -1752,9 +1752,8 @@ export class Game {
      * カード画像パスを取得（View層と統一）
      */
     _getCardImagePath(card) {
-        // data-manager.jsのgetCardImagePath関数と同じロジック
-        const { getCardImagePath } = window;
-        return getCardImagePath ? getCardImagePath(card.name_en, card) : 'assets/ui/card_back.webp';
+        // data-manager.jsからインポートしたgetCardImagePath関数を使用
+        return getCardImagePath(card.name_en, card);
     }
 
     /**
