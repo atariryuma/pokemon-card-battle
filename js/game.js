@@ -768,7 +768,7 @@ export class Game {
             },
             {
                 type: 'pre-render',
-                stateUpdate: (state) => Logic.retreat(state, 'player', fromActiveId, toBenchIndex)
+                stateUpdate: (state) => Logic.retreat(state, 'player', fromActiveId, toBenchIndex).newState
             },
             { type: 'post-render' }
         ];
