@@ -1,6 +1,6 @@
 /**
  * TURN-MANAGER.JS - ターンシーケンス管理
- * 
+ *
  * プレイヤーとCPUのターン進行、制約管理、自動処理を統括
  */
 
@@ -9,8 +9,7 @@ import { CardOrientationManager } from './card-orientation.js';
 import { GAME_PHASES } from './phase-manager.js';
 import { cloneGameState, addLogEntry } from './state.js';
 import * as Logic from './logic.js';
-
-const noop = () => {};
+import { noop } from './utils.js';
 
 /**
  * ターン管理クラス
@@ -256,24 +255,17 @@ export class TurnManager {
    */
   canPlayerAttack(state) {
     // 基本チェック
-    if (state.turnState.hasAttacked) return false;
+    if (state.turnState?.hasAttacked) return false;
     if (state.turnPlayer !== 'player') return false;
     if (state.phase !== GAME_PHASES.PLAYER_MAIN) return false;
-    
+
     // ポケモン・エネルギーチェック
     const activePokemon = state.players.player.active;
     if (!activePokemon || !activePokemon.attacks) return false;
-    
-    // 使用可能な攻撃があるかチェック
+
+    // 使用可能な攻撃があるかチェック（Logic.jsを正しくimportして使用）
     return activePokemon.attacks.some(attack => {
-      // Logic.jsの関数を使用してエネルギーチェック（import必要）
-      try {
-        const Logic = require('./logic.js');
-        return Logic.hasEnoughEnergy(activePokemon, attack);
-      } catch (error) {
-        // Logic.jsが利用できない場合の簡易チェック
-        return true; // 一時的にtrue
-      }
+      return Logic.hasEnoughEnergy(activePokemon, attack);
     });
   }
 

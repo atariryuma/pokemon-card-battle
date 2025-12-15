@@ -3,10 +3,10 @@
  * カードデータの読み込み、画像パス管理、フォールバック機能を提供
  */
 
+import { noop } from './utils.js';
+
 // カードデータ（JSONから動的読み込み）
 let cardMasterList = [];
-
-const noop = () => {};
 
 /**
  * カードデータをJSONファイルから読み込む
@@ -16,7 +16,7 @@ const noop = () => {};
 export async function loadCardsFromJSON(forceReload = false) {
     try {
         const cacheParam = forceReload ? `?_t=${Date.now()}` : '';
-        const response = await fetch(`./data/cards-master.json${cacheParam}`);
+        const response = await fetch(`/data/cards-master.json${cacheParam}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }

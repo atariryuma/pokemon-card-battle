@@ -1,12 +1,11 @@
 /**
  * ActionHUDManager - フローティングアクションボタンの統一管理クラス
- * 
+ *
  * すべてのHUDボタンの表示/非表示、イベントハンドラ管理を一元化
  */
 
 import { BUTTON_IDS, CONTAINER_IDS, CSS_CLASSES } from './ui-constants.js';
-
-const noop = () => {};
+import { noop } from './utils.js';
 
 export class ActionHUDManager {
     constructor() {

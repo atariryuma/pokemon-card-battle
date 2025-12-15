@@ -1,6 +1,7 @@
 /*
   Dev server with JSON CRUD for cards-master.json
-  - Serves static files from project root
+  - Serves static files from public/ directory
+  - Serves src/ files from /src path
   - API under /api/cards supports GET/POST/PUT/DELETE
   - Persists to data/cards-master.json (creates if missing)
   - No external deps
@@ -13,10 +14,12 @@ const path = require('path');
 const url = require('url');
 
 const PORT = Number(process.env.PORT) || 3000;
-const ROOT = path.resolve(process.cwd());
-const DATA_DIR = path.join(ROOT, 'data');
+const PROJECT_ROOT = path.resolve(process.cwd());
+const PUBLIC_DIR = path.join(PROJECT_ROOT, 'public');
+const SRC_DIR = path.join(PROJECT_ROOT, 'src');
+const DATA_DIR = path.join(PROJECT_ROOT, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'cards-master.json');
-const ASSETS_DIR = path.join(ROOT, 'assets');
+const ASSETS_DIR = path.join(PUBLIC_DIR, 'assets');
 const CARD_IMAGES_DIR = path.join(ASSETS_DIR, 'cards');
 const CARD_FILES_DIR = path.resolve(process.env.CARD_SAVE_DIR || path.join(DATA_DIR, 'cards'));
 
@@ -287,7 +290,7 @@ async function handleImageUpload(req, res, pathname) {
     const tmp = outPath + '.tmp';
     await fsp.writeFile(tmp, buf);
     await fsp.rename(tmp, outPath);
-    const rel = path.relative(ROOT, outPath).replace(/\\/g, '/');
+    const rel = path.relative(PROJECT_ROOT, outPath).replace(/\\/g, '/');
     return json(res, 201, { 
       path: '/' + rel, 
       filename: path.basename(outPath), 
@@ -561,7 +564,7 @@ async function handleCardFile(req, res, pathname) {
     const payload = JSON.stringify(card, null, 2);
     await fsp.writeFile(tmp, payload, 'utf8');
     await fsp.rename(tmp, outPath);
-    const rel = path.relative(ROOT, outPath).replace(/\\/g, '/');
+    const rel = path.relative(PROJECT_ROOT, outPath).replace(/\\/g, '/');
     return json(res, 201, { path: '/' + rel, filename });
   } catch (err) {
     const status = err.status || 500;
@@ -572,8 +575,24 @@ async function handleCardFile(req, res, pathname) {
 function safeResolve(requestPath) {
   const decoded = decodeURIComponent(requestPath.split('?')[0]);
   const normalized = path.normalize(decoded).replace(/^\\|^\//, '');
-  const abs = path.join(ROOT, normalized);
-  if (!abs.startsWith(ROOT)) return null; // path traversal guard
+
+  // Handle /src/ paths
+  if (normalized.startsWith('src/') || normalized.startsWith('src\\')) {
+    const abs = path.join(PROJECT_ROOT, normalized);
+    if (!abs.startsWith(SRC_DIR)) return null; // path traversal guard
+    return abs;
+  }
+
+  // Handle /data/ paths
+  if (normalized.startsWith('data/') || normalized.startsWith('data\\')) {
+    const abs = path.join(PROJECT_ROOT, normalized);
+    if (!abs.startsWith(DATA_DIR)) return null; // path traversal guard
+    return abs;
+  }
+
+  // Default to public/ directory
+  const abs = path.join(PUBLIC_DIR, normalized);
+  if (!abs.startsWith(PUBLIC_DIR)) return null; // path traversal guard
   return abs;
 }
 

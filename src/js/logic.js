@@ -1,5 +1,5 @@
 import { GAME_PHASES } from './phase-manager.js';
-import { addLogEntry } from './state.js';
+import { addLogEntry, updateTurnState } from './state.js';
 
 // ==========================================
 // 手札制限システム（10枚上限）
@@ -58,8 +58,13 @@ export function canGainCards(state, player, cardCount = 1) {
  * @returns {{card: object, index: number} | null}
  */
 function findCardInHand(playerState, cardId) {
+    // Null安全性チェック
+    if (!playerState || !Array.isArray(playerState.hand) || !cardId) {
+        return null;
+    }
+
     // runtimeId 優先で一致、互換で master id も許容
-    const index = playerState.hand.findIndex(c => (c.runtimeId === cardId) || (c.id === cardId));
+    const index = playerState.hand.findIndex(c => c && ((c.runtimeId === cardId) || (c.id === cardId)));
     if (index === -1) {
         return null;
     }
@@ -109,10 +114,15 @@ export function placeCardInActive(state, player, cardId) {
  * @returns {object} The new game state.
  */
 export function placeCardOnBench(state, player, cardId, benchIndex) {
+    // Null安全性チェック
+    if (!state || !state.players || !state.players[player]) {
+        return state;
+    }
+
     const playerState = state.players[player];
     const cardInfo = findCardInHand(playerState, cardId);
 
-    if (!cardInfo || benchIndex < 0 || benchIndex >= 5 || playerState.bench[benchIndex]) {
+    if (!cardInfo || benchIndex < 0 || benchIndex >= 5 || !Array.isArray(playerState.bench) || playerState.bench[benchIndex]) {
         return state; // Invalid move
     }
 
@@ -144,6 +154,8 @@ export function placeCardOnBench(state, player, cardId, benchIndex) {
  */
 export function drawCard(state, player) {
     const playerState = state.players[player];
+
+    // デッキ枚数チェック
     if (playerState.deck.length === 0) {
         let newState = {
             ...state,
@@ -152,6 +164,14 @@ export function drawCard(state, player) {
             gameEndReason: 'deck_out',
         };
         newState = addLogEntry(newState, { message: `${player === 'player' ? 'あなた' : '相手'}の山札がなくなった！` });
+        return newState;
+    }
+
+    // 手札上限チェック（HAND_LIMIT = 10枚）
+    if (!canDrawCard(state, player)) {
+        let newState = addLogEntry(state, {
+            message: `${player === 'player' ? 'あなた' : '相手'}の手札が上限（${HAND_LIMIT}枚）に達しているため、ドローできません。`
+        });
         return newState;
     }
 
@@ -170,6 +190,9 @@ export function drawCard(state, player) {
             },
         },
     };
+
+    // turnStateを更新してドロー済みフラグを立てる
+    newState = updateTurnState(newState, { hasDrawn: true });
     newState = addLogEntry(newState, { message: `${player === 'player' ? 'あなた' : '相手'}はカードを1枚引いた。` });
     return newState;
 }
@@ -181,10 +204,21 @@ export function drawCard(state, player) {
  * @returns {{pokemon: object, zone: string, index: number} | null}
  */
 function findPokemonById(playerState, pokemonId) {
+    // Null安全性チェック
+    if (!playerState || !pokemonId) {
+        return null;
+    }
+
     // runtimeId 優先
     if (playerState.active && (playerState.active.runtimeId === pokemonId || playerState.active.id === pokemonId)) {
         return { pokemon: playerState.active, zone: 'active', index: 0 };
     }
+
+    // bench配列の存在確認
+    if (!Array.isArray(playerState.bench)) {
+        return null;
+    }
+
     const benchIndex = playerState.bench.findIndex(p => p && (p.runtimeId === pokemonId || p.id === pokemonId));
     if (benchIndex !== -1) {
         return { pokemon: playerState.bench[benchIndex], zone: 'bench', index: benchIndex };
@@ -203,8 +237,8 @@ function findPokemonById(playerState, pokemonId) {
 export function attachEnergy(state, player, energyId, pokemonId) {
     const playerState = state.players[player];
 
-    // Check if energy can be attached
-    if (state.hasAttachedEnergyThisTurn) {
+    // Check if energy can be attached (turnState経由でチェック)
+    if (state.turnState?.energyAttached > 0) {
         let newState = addLogEntry(state, { message: `${player === 'player' ? 'あなた' : '相手'}はすでにこのターンにエネルギーを付けている。` });
         return newState;
     }
@@ -225,7 +259,7 @@ export function attachEnergy(state, player, energyId, pokemonId) {
     const newHand = [...playerState.hand];
     newHand.splice(energyInfo.index, 1);
 
-    // Add energy to pokemon
+    // Add energy to pokemon (Immutability原則: 新しいオブジェクトを作成)
     const updatedPokemon = {
         ...targetInfo.pokemon,
         attached_energy: [...(targetInfo.pokemon.attached_energy || []), energyInfo.card],
@@ -240,9 +274,9 @@ export function attachEnergy(state, player, energyId, pokemonId) {
         newBench[targetInfo.index] = updatedPokemon;
     }
 
+    // 状態を更新（turnStateヘルパーを使用）
     let newState = {
         ...state,
-        hasAttachedEnergyThisTurn: true,
         players: {
             ...state.players,
             [player]: {
@@ -253,6 +287,9 @@ export function attachEnergy(state, player, energyId, pokemonId) {
             },
         },
     };
+
+    // turnStateを更新してエネルギー付与を記録
+    newState = updateTurnState(newState, { energyAttached: 1 });
     newState = addLogEntry(newState, { message: `${player === 'player' ? 'あなた' : '相手'}は${targetInfo.pokemon.name_ja}に${energyInfo.card.name_ja}を付けた。` });
     return newState;
 }
@@ -385,7 +422,12 @@ export function retreat(state, player, fromActiveId, toBenchIndex) {
  * @returns {boolean}
  */
 export function hasEnoughEnergy(pokemon, attack) {
-    const attached = (pokemon.attached_energy || []).map(e => e.energy_type);
+    // Null安全性チェック
+    if (!pokemon || !attack || !Array.isArray(attack.cost)) {
+        return false;
+    }
+
+    const attached = (pokemon.attached_energy || []).map(e => e && e.energy_type).filter(Boolean);
     const cost = [...attack.cost];
 
     for (let i = attached.length - 1; i >= 0; i--) {

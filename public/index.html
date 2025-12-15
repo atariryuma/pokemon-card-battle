@@ -42,7 +42,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="assets/z-index-vars.css">
+    <link rel="stylesheet" href="/src/styles/z-index-vars.css">
     <style>
         /* カスタムスタイル */
         body {
@@ -176,24 +176,38 @@
               --overlap-player: clamp(16px, 4vh, 36px);
               --footer-height: 80px; /* New variable for HUD area */
               --board-margin-y: 0.5vh; /* Reduced vertical margin for the board */
-              
+
               /* 動的手札サイズ（ディスプレイ対応） */
               --card-width: clamp(60px, min(8vw, 6vh), 96px);
               --hand-card-width: clamp(60px, min(12vw, 9vh), 120px);
               --hand-card-height: clamp(84px, min(16.8vw, 12.6vh), 168px);
               /* 手札間隔もレスポンシブに */
               --hand-gap: clamp(2px, 0.5vw, 8px);
-              
+
               /* プレイマット設定 - 大きく、立体的に */
               --playmat-size: min(80vh, 80vw);
               --board-rotation-x: 42deg;     /* 適度な3D傾斜効果 */
               /* 3D設定 - より立体感を強調、少し上に移動 */
               --tz-game-board: -160px;
-              
+
               /* GPUアクセラレーション最適化 */
               --gpu-acceleration: translateZ(0);
+              --gpu-layer: translateZ(0);
               --will-change: transform, opacity;
-              
+              --performance-will-change: transform, opacity;
+
+              /* アニメーションタイミング変数 */
+              --anim-fast: 200ms;
+              --anim-normal: 400ms;
+              --anim-slow: 800ms;
+              --anim-combat: 600ms;
+              --anim-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+              --anim-ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+              --anim-ease-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+              --anim-enabled: 1;
+              --anim-particles: 1;
+              --shake-intensity: 1;
+
               /* ビューポート余白 */
               --viewport-padding: 8px;
           }
@@ -1976,19 +1990,7 @@
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
         }
 
-        /* 🎨 新統一アニメーションシステム - CSS変数 */
-        :root {
-            --anim-fast: 200ms;
-            --anim-normal: 400ms;
-            --anim-slow: 800ms;
-            --anim-combat: 600ms;
-            --anim-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
-            --anim-ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            --anim-ease-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-            --anim-enabled: 1;
-            --anim-particles: 1;
-            --shake-intensity: 1;
-        }
+        /* 🎨 アニメーション変数は上部の:rootセクションに統合済み */
 
         /* 🎯 カード移動アニメーション */
         @keyframes cardToActive {
@@ -2834,7 +2836,7 @@
         }
         document.addEventListener('DOMContentLoaded', async () => {
             // カード向き制御システムをインポート
-            const { CardOrientationManager } = await import('./js/card-orientation.js');
+            const { CardOrientationManager } = await import('/src/js/card-orientation.js');
             
             // 手札カードのクリック処理とアクティブ化
             function setupHandCardInteraction() {
@@ -3134,7 +3136,7 @@
     <script type="module">
         // Modal Manager の初期化
         try {
-            const { modalManager } = await import('./js/modal-manager.js');
+            const { modalManager } = await import('/src/js/modal-manager.js');
             const noop = window.noop || (() => {});
 
             // DOM準備完了後にModal Managerを初期化
@@ -3156,7 +3158,7 @@
         // main.jsインポート開始
         
         try {
-            const module = await import('./js/main.js');
+            const module = await import('/src/js/main.js');
             // main.jsインポート成功
             
             // 初期化完了を待機

@@ -7,21 +7,23 @@ import { errorHandler } from './error-handler.js';
 import { modalManager } from './modal-manager.js';
 import { ToastMessenger } from './toast-messages.js';
 import { gameLogger } from './game-logger.js';
+import { noop, EventListenerManager } from './utils.js';
 
 // Z-index定数 (CSS変数と連携) - 最小限に削減
 import { LEGACY_Z_INDEX as Z_INDEX, ZIndexManager } from './z-index-constants.js';
-
-const noop = () => {};
 
 export class View {
     constructor(rootEl) {
         this.rootEl = rootEl;
         this.cardClickHandler = null;
 
+        // メモリリーク対策: イベントリスナー管理
+        this.eventListenerManager = new EventListenerManager();
+
         // Board containers
         this.playerBoard = rootEl.querySelector('.player-board:not(.opponent-board)');
         this.opponentBoard = rootEl.querySelector('.opponent-board');
-        
+
         // 差分レンダリング用キャッシュ
         this.lastRenderedState = null;
         this.domCache = new Map();
@@ -48,11 +50,16 @@ export class View {
             this.cpuHand.classList.add('cpu-hand-scaling');
         }
         
+        // イベントハンドラーを保存（メモリリーク対策）
+        this._handClickHandler = this._handleHandClickDelegation.bind(this);
+        this._handMouseEnterHandler = (e) => gameLogger.logHoverEvent(e.target, true);
+        this._handMouseLeaveHandler = (e) => gameLogger.logHoverEvent(e.target, false);
+
         // 手札エリア全体のクリック保護
         if (this.playerHand) {
-            this.playerHand.addEventListener('click', this._handleHandClickDelegation.bind(this));
-            this.playerHand.addEventListener('mouseenter', (e) => gameLogger.logHoverEvent(e.target, true));
-            this.playerHand.addEventListener('mouseleave', (e) => gameLogger.logHoverEvent(e.target, false));
+            this.eventListenerManager.add(this.playerHand, 'click', this._handClickHandler);
+            this.eventListenerManager.add(this.playerHand, 'mouseenter', this._handMouseEnterHandler);
+            this.eventListenerManager.add(this.playerHand, 'mouseleave', this._handMouseLeaveHandler);
             gameLogger.logGameEvent('INFO', 'プレイヤー手札クリック・ホバー判定を有効化');
         } else {
             gameLogger.logGameEvent('ERROR', 'プレイヤー手札要素が見つかりません');
@@ -61,40 +68,52 @@ export class View {
         // プレイマットのクリック・ホバー判定
         const gameBoard = document.getElementById('game-board');
         if (gameBoard) {
-            gameBoard.addEventListener('click', (e) => gameLogger.logClickEvent(e.target));
-            gameBoard.addEventListener('mouseenter', (e) => gameLogger.logHoverEvent(e.target, true));
-            gameBoard.addEventListener('mouseleave', (e) => gameLogger.logHoverEvent(e.target, false));
+            this._boardClickHandler = (e) => gameLogger.logClickEvent(e.target);
+            this._boardMouseEnterHandler = (e) => gameLogger.logHoverEvent(e.target, true);
+            this._boardMouseLeaveHandler = (e) => gameLogger.logHoverEvent(e.target, false);
+
+            this.eventListenerManager.add(gameBoard, 'click', this._boardClickHandler);
+            this.eventListenerManager.add(gameBoard, 'mouseenter', this._boardMouseEnterHandler);
+            this.eventListenerManager.add(gameBoard, 'mouseleave', this._boardMouseLeaveHandler);
         }
         
         // 相手フィールドの個別イベントリスナー追加
         const opponentBoard = document.querySelector('.opponent-board');
         const cpuBoard = document.getElementById('cpu-board');
-        
+
         if (opponentBoard) {
-            opponentBoard.addEventListener('click', (e) => {
+            this._opponentClickHandler = (e) => {
                 e.stopPropagation();
                 gameLogger.logClickEvent(e.target, '相手フィールドクリック');
-            });
-            opponentBoard.addEventListener('mouseenter', (e) => {
+            };
+            this._opponentMouseEnterHandler = (e) => {
                 gameLogger.logHoverEvent(e.target, true);
-            });
-            opponentBoard.addEventListener('mouseleave', (e) => {
+            };
+            this._opponentMouseLeaveHandler = (e) => {
                 gameLogger.logHoverEvent(e.target, false);
-            });
+            };
+
+            this.eventListenerManager.add(opponentBoard, 'click', this._opponentClickHandler);
+            this.eventListenerManager.add(opponentBoard, 'mouseenter', this._opponentMouseEnterHandler);
+            this.eventListenerManager.add(opponentBoard, 'mouseleave', this._opponentMouseLeaveHandler);
             gameLogger.logGameEvent('INFO', '相手フィールドのクリック・ホバー判定を有効化');
         }
-        
+
         if (cpuBoard && cpuBoard !== opponentBoard) {
-            cpuBoard.addEventListener('click', (e) => {
+            this._cpuBoardClickHandler = (e) => {
                 e.stopPropagation();
                 gameLogger.logClickEvent(e.target, 'CPUボードクリック');
-            });
-            cpuBoard.addEventListener('mouseenter', (e) => {
+            };
+            this._cpuBoardMouseEnterHandler = (e) => {
                 gameLogger.logHoverEvent(e.target, true);
-            });
-            cpuBoard.addEventListener('mouseleave', (e) => {
+            };
+            this._cpuBoardMouseLeaveHandler = (e) => {
                 gameLogger.logHoverEvent(e.target, false);
-            });
+            };
+
+            this.eventListenerManager.add(cpuBoard, 'click', this._cpuBoardClickHandler);
+            this.eventListenerManager.add(cpuBoard, 'mouseenter', this._cpuBoardMouseEnterHandler);
+            this.eventListenerManager.add(cpuBoard, 'mouseleave', this._cpuBoardMouseLeaveHandler);
             gameLogger.logGameEvent('INFO', 'CPUボードのクリック・ホバー判定を有効化');
         }
 
@@ -1108,10 +1127,9 @@ export class View {
         // 新モーダルシステムで中央に表示（左画像 / 右情報）
         const imageHtml = `
           <div class="flex-shrink-0 w-72 max-w-[40%]">
-            <img src="${getCardImagePath(card.name_en, card)}" 
-                 alt="${card.name_ja}" 
-                 class="w-full h-auto max-h-96 object-contain rounded-md border border-gray-700"
-                 onerror="this.src='assets/ui/card_back.webp'; this.onerror=null;" />
+            <img src="${getCardImagePath(card.name_en, card)}"
+                 alt="${card.name_ja}"
+                 class="w-full h-auto max-h-96 object-contain rounded-md border border-gray-700 card-info-modal-image" />
           </div>
         `;
         const detailsHtml = `
@@ -1132,6 +1150,16 @@ export class View {
               { text: '閉じる', callback: () => {}, className: 'px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg' }
             ]
         });
+
+        // XSS対策: 画像エラーハンドリング
+        setTimeout(() => {
+            const img = document.querySelector('.card-info-modal-image');
+            if (img) {
+                img.addEventListener('error', function() {
+                    this.src = 'assets/ui/card_back.webp';
+                });
+            }
+        }, 0);
     }
 
     hideCardInfo() {
@@ -1882,5 +1910,27 @@ export class View {
         
         // 初期状態で軽い思考アニメーション開始
         setTimeout(() => startCpuThinking(), 1000);
+    }
+
+    /**
+     * クリーンアップメソッド - メモリリーク対策
+     * Viewインスタンスを破棄する前に呼び出すこと
+     */
+    cleanup() {
+        // すべてのイベントリスナーを削除
+        if (this.eventListenerManager) {
+            this.eventListenerManager.removeAll();
+        }
+
+        // DOMキャッシュをクリア
+        if (this.domCache) {
+            this.domCache.clear();
+        }
+
+        // その他の参照をクリア
+        this.lastRenderedState = null;
+        this.cardClickHandler = null;
+
+        noop('🧹 View cleanup完了 - すべてのイベントリスナーとキャッシュを削除しました');
     }
 }

@@ -3,15 +3,20 @@ import { GAME_PHASES } from './phase-manager.js';
 
 /**
  * Fisher-Yates shuffle algorithm - 配列をランダムにシャッフルする
+ * Immutable version: 元の配列を変更せず、新しい配列を返す
  * @param {Array} array - シャッフルする配列
- * @returns {Array} シャッフル済みの配列（元配列を変更）
+ * @returns {Array} シャッフル済みの新しい配列
  */
 function shuffle(array) {
-    for (let i = array.length - 1; i > 0; i--) {
+    // スプレッド演算子で新しい配列を作成（Immutability原則）
+    const newArray = [...array];
+
+    for (let i = newArray.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
+        [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
     }
-    return array;
+
+    return newArray;
 }
 
 /**
@@ -94,6 +99,7 @@ export function createInitialState() {
         isProcessing: false,
         
         // Turn state management (統合されたターン制約)
+        // 全てのターン関連の状態はturnStateに集約
         turnState: {
             hasAttacked: false,           // ターン内攻撃済みフラグ
             hasDrawn: false,              // ターン内ドロー済みフラグ
@@ -102,12 +108,6 @@ export function createInitialState() {
             canRetreat: true,             // にげる可能フラグ
             canPlaySupporter: true        // サポート使用可能フラグ
         },
-        
-        // Legacy turn constraints (互換性のため一時保持)
-        hasDrawnThisTurn: false,
-        hasAttachedEnergyThisTurn: false,
-        canRetreat: true,
-        canPlaySupporter: true,
         
         // Special states
         pendingAction: null,
@@ -206,4 +206,35 @@ export function addLogEntry(state, entry) {
         ...entry
     });
     return newState;
+}
+
+/**
+ * 互換性レイヤー: レガシーフィールドからturnStateへの移行サポート
+ *
+ * 古いコードがレガシーフィールドにアクセスした場合、
+ * 自動的にturnStateの値を返す
+ */
+export function getTurnStateCompat(state) {
+    return {
+        hasDrawnThisTurn: state.turnState?.hasDrawn ?? false,
+        hasAttachedEnergyThisTurn: state.turnState?.energyAttached > 0,
+        canRetreat: state.turnState?.canRetreat ?? true,
+        canPlaySupporter: state.turnState?.canPlaySupporter ?? true,
+    };
+}
+
+/**
+ * turnStateを安全に更新する（Immutability保証）
+ * @param {Object} state - 現在のゲーム状態
+ * @param {Object} updates - turnStateへの更新内容
+ * @returns {Object} 新しいゲーム状態
+ */
+export function updateTurnState(state, updates) {
+    return {
+        ...state,
+        turnState: {
+            ...state.turnState,
+            ...updates
+        }
+    };
 }

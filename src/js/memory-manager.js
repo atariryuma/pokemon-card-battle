@@ -1,10 +1,10 @@
 /**
  * MEMORY-MANAGER.JS - メモリとパフォーマンス管理システム
- * 
+ *
  * タイマー、DOM要素、イベントリスナーの一元管理でメモリリークを防止
  */
 
-const noop = () => {};
+import { noop } from './utils.js';
 
 /**
  * メモリ効率管理クラス

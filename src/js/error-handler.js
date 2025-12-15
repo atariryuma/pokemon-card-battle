@@ -1,12 +1,11 @@
 /**
  * ERROR-HANDLER.JS - ゲーム用エラーハンドリングシステム
- * 
+ *
  * エラー捕捉、ユーザーフレンドリーな表示、リトライ機能を提供
  */
 
 import { GAME_PHASES } from './phase-manager.js';
-
-const noop = () => {};
+import { noop } from './utils.js';
 
 /**
  * エラータイプの定義

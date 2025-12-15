@@ -14,8 +14,7 @@ import { modalManager } from './modal-manager.js';
 import { ZIndexManager } from './z-index-constants.js';
 import { memoryManager } from './memory-manager.js';
 import { actionHUDManager } from './action-hud-manager.js';
-
-const noop = () => {};
+import { noop } from './utils.js';
 
 export class Game {
     constructor(rootEl, playmatSlotsData) {
@@ -1662,6 +1661,16 @@ export class Game {
                 'central',
                 true // allowHtml = true
             );
+
+            // XSS対策: 画像エラーハンドリング
+            setTimeout(() => {
+                const img = document.querySelector('.bench-placement-card-image');
+                if (img) {
+                    img.addEventListener('error', function() {
+                        this.src = 'assets/ui/card_back.webp';
+                    });
+                }
+            }, 0);
         } else if (card.card_type === 'Basic Energy' || card.card_type === 'Energy') {
             // エネルギーを付ける
             if (this.state.hasAttachedEnergyThisTurn) {
@@ -1721,10 +1730,9 @@ export class Game {
         // カード画像部分
         const imageHtml = `
             <div class="flex-shrink-0 w-48 max-w-[35%]">
-                <img src="${this._getCardImagePath(card)}" 
-                     alt="${card.name_ja}" 
-                     class="w-full h-auto max-h-72 object-contain rounded-md border border-gray-700"
-                     onerror="this.src='assets/ui/card_back.webp'; this.onerror=null;" />
+                <img src="${this._getCardImagePath(card)}"
+                     alt="${card.name_ja}"
+                     class="w-full h-auto max-h-72 object-contain rounded-md border border-gray-700 bench-placement-card-image" />
             </div>
         `;
 
@@ -1909,7 +1917,7 @@ export class Game {
                     <div class="attack-selection">
                         <h3>ワザを選択してください</h3>
                         ${usableAttacks.map(attack => `
-                            <div class="attack-option" onclick="window.gameInstance._executeAttackAndCloseModal(${attack.index})">
+                            <div class="attack-option" data-attack-index="${attack.index}">
                                 <div class="attack-name">${attack.name_ja}</div>
                                 <div class="attack-details">
                                     <span class="damage">ダメージ: ${attack.damage || 0}</span>
@@ -1924,10 +1932,9 @@ export class Game {
                 <!-- Right: Opponent Pokemon Card Image -->
                 <div class="battle-right-panel">
                     <div class="opponent-card-display">
-                        <img src="${defenderImagePath}" 
-                             alt="${defender.name_ja}" 
-                             class="opponent-card-image" 
-                             onerror="this.src='assets/ui/card_back.webp'; this.onerror=null;" />
+                        <img src="${defenderImagePath}"
+                             alt="${defender.name_ja}"
+                             class="opponent-card-image" />
                         <div class="card-overlay">
                             <h4>${defender.name_ja}</h4>
                             <div class="card-hp">HP: ${Math.max(0, defender.hp - (defender.damage || 0))}/${defender.hp}</div>
@@ -1945,6 +1952,25 @@ export class Game {
                 { text: 'キャンセル', callback: () => {}, className: 'px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg' }
             ]
         });
+
+        // XSS対策: イベントリスナーを動的に追加
+        setTimeout(() => {
+            const attackOptions = document.querySelectorAll('.attack-option');
+            attackOptions.forEach(option => {
+                option.addEventListener('click', () => {
+                    const attackIndex = parseInt(option.dataset.attackIndex, 10);
+                    this._executeAttackAndCloseModal(attackIndex);
+                });
+            });
+
+            // 画像エラーハンドリング（XSS対策: onerror属性の代わり）
+            const opponentImage = document.querySelector('.opponent-card-image');
+            if (opponentImage) {
+                opponentImage.addEventListener('error', function() {
+                    this.src = 'assets/ui/card_back.webp';
+                });
+            }
+        }, 0);
     }
 
     /**
@@ -2209,11 +2235,11 @@ export class Game {
                     
                     <!-- アクションボタン -->
                     <div class="result-actions">
-                        <button class="result-btn primary-btn" onclick="window.game._startNewGame(); document.getElementById('game-result-modal').remove();">
+                        <button class="result-btn primary-btn" data-action="newGame">
                             <span class="btn-icon">🚀</span>
                             <span class="btn-text">新しいバトル</span>
                         </button>
-                        <button class="result-btn secondary-btn" onclick="window.game._showDetailedStats(); document.getElementById('game-result-modal').remove();">
+                        <button class="result-btn secondary-btn" data-action="stats">
                             <span class="btn-icon">📊</span>
                             <span class="btn-text">詳細統計</span>
                         </button>
@@ -2230,7 +2256,25 @@ export class Game {
         resultModal.innerHTML = modalContent;
         document.body.appendChild(resultModal);
         ZIndexManager.apply(resultModal, 'MODALS');
-        
+
+        // XSS対策: イベントリスナーを動的に追加
+        const newGameBtn = resultModal.querySelector('[data-action="newGame"]');
+        const statsBtn = resultModal.querySelector('[data-action="stats"]');
+
+        if (newGameBtn) {
+            newGameBtn.addEventListener('click', () => {
+                this._startNewGame();
+                resultModal.remove();
+            });
+        }
+
+        if (statsBtn) {
+            statsBtn.addEventListener('click', () => {
+                this._showDetailedStats();
+                resultModal.remove();
+            });
+        }
+
         // アニメーション開始
         requestAnimationFrame(() => {
             resultModal.classList.add('result-modal-enter');

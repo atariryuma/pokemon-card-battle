@@ -1,8 +1,10 @@
 /**
  * PHASE-MANAGER.JS - ゲームフェーズ管理システム
- * 
+ *
  * game_sequence.mdで定義されたフェーズシーケンスを管理
  */
+
+import { noop } from './utils.js';
 
 /**
  * ゲームフェーズの定義
@@ -31,8 +33,6 @@ export const GAME_PHASES = {
   PRIZE_SELECTION: 'prizeSelection',
   GAME_OVER: 'gameOver'
 };
-
-const noop = () => {};
 
 /**
  * フェーズ遷移管理クラス
@@ -137,10 +137,14 @@ export class PhaseManager {
   }
 
   /**
-   * エネルギーチェックのヘルパー（Logic.jsから移植）
-   * TODO: Logic.jsのhasEnoughEnergyを使用するように修正
+   * エネルギーチェック（Logic.jsの関数を使用）
+   * @deprecated Logic.hasEnoughEnergyを直接使用してください
    */
   hasEnoughEnergyForAttack(pokemon, attack) {
+    // Logic.jsをimportして使用する必要がある
+    // ここでは一時的に簡易チェックを提供
+    console.warn('PhaseManager.hasEnoughEnergyForAttack is deprecated. Use Logic.hasEnoughEnergy instead.');
+
     const attached = (pokemon.attached_energy || []).map(e => e.energy_type);
     const cost = [...attack.cost];
 
@@ -152,7 +156,7 @@ export class PhaseManager {
         attached.splice(i, 1);
       }
     }
-    
+
     return cost.length === 0 || (cost.every(c => c === 'Colorless') && attached.length >= cost.length);
   }
 

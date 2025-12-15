@@ -4,8 +4,7 @@ import { animate } from './animation-manager.js';
 import { enableAutoRefresh } from './data-manager.js';
 import { debugSystem } from './debug-system.js';
 import { gameLogger } from './game-logger.js';
-
-const noop = () => {};
+import { noop } from './utils.js';
 
 // 初期化状態の追跡
 let initializationState = {

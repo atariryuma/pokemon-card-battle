@@ -1,6 +1,6 @@
 /**
  * SETUP-MANAGER.JS - セットアップフェーズ専用処理
- * 
+ *
  * 初期ポケモン選択、マリガン、サイドカード配置などを管理
  */
 
@@ -10,8 +10,7 @@ import { GAME_PHASES } from './phase-manager.js';
 import { cloneGameState, addLogEntry } from './state.js';
 import * as Logic from './logic.js';
 import { gameLogger } from './game-logger.js';
-
-const noop = () => {};
+import { noop } from './utils.js';
 
 /**
  * セットアップ管理クラス

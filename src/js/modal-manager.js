@@ -1,14 +1,13 @@
 /**
  * MODAL-MANAGER.JS - 統一モーダルシステム
- * 
+ *
  * ゲームのUI体験を向上させるための統一されたモーダル管理システム
  * 4つのモーダルタイプを管理：中央モーダル、通知トースト、アクションHUD、状況パネル
  */
 
 import { ZIndexManager } from './z-index-constants.js';
 import { getCardImagePath } from './data-manager.js';
-
-const noop = () => {};
+import { noop } from './utils.js';
 
 /**
  * モーダルタイプの定義
