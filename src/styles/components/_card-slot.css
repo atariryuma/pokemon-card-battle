@@ -1,0 +1,42 @@
+/**
+ * カードスロット - 向き制御とイベント委譲のみ
+ * 
+ * 位置・サイズは index.html の既存CSS + 動的CSSを使用
+ * このファイルは data-orientation による回転のみ担当
+ */
+
+/* ==========================================
+   カード向き制御（data-orientation属性ベース）
+   ========================================== */
+
+/* カードスロットはクリック可能 */
+.card-slot {
+    pointer-events: auto;
+    cursor: pointer;
+    /* 3D空間でフラット化（クリック問題対策） */
+    transform-style: flat;
+}
+
+/* 反転スロット（相手フィールド） */
+.card-slot[data-orientation="flipped"] {
+    transform: rotate(180deg);
+}
+
+/* 正位置スロット */
+.card-slot[data-orientation="upright"] {
+    transform: none;
+}
+
+/* ==========================================
+   ホバー効果
+   ========================================== */
+
+/* 正位置のホバー */
+.card-slot[data-orientation="upright"]:hover {
+    transform: scale(1.05);
+}
+
+/* 反転のホバー */
+.card-slot[data-orientation="flipped"]:hover {
+    transform: rotate(180deg) scale(1.05);
+}

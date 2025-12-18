@@ -1,19 +1,20 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ポケモンカードバトルフィールド</title>
     <!-- Tailwind: load via CDN only in development (suppress CDN warning) -->
     <script>
-        (function() {
+        (function () {
             const host = (location.hostname || '').toLowerCase();
             const isDevHost = ['localhost', '127.0.0.1', '0.0.0.0'].includes(host) || host.endsWith('.local');
             const isDev = location.protocol === 'file:' || isDevHost || /[?&]dev(=1)?\b/.test(location.search);
 
             if (isDev) {
                 const __origWarn = console.warn;
-                console.warn = function(...args) {
+                console.warn = function (...args) {
                     const msg = String(args?.[0] ?? '');
                     if (msg.includes('cdn.tailwindcss.com should not be used in production')) {
                         // Ignore Tailwind CDN production warning in development
@@ -41,21 +42,157 @@
     </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+JP:wght@400;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Three.js ES Module Import Map -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+                "three/": "https://cdn.jsdelivr.net/npm/three@0.169.0/"
+            }
+        }
+    </script>
+
     <link rel="stylesheet" href="/src/styles/z-index-vars.css">
+    <!-- 新モジュラーCSSシステム -->
+    <link rel="stylesheet" href="/src/styles/main.css">
     <style>
+        /* ==========================================
+           UI/UX デザインシステム - ベストプラクティス
+           ========================================== */
+        :root {
+            /* === タッチターゲット（WCAG 2.2準拠: 最小44px） === */
+            --touch-target-min: 44px;
+            --touch-target-comfortable: 48px;
+            --touch-target-large: 56px;
+
+            /* === スペーシングシステム（8pxグリッド） === */
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --spacing-xl: 32px;
+            --spacing-2xl: 48px;
+
+            /* === タイポグラフィスケール === */
+            --font-size-xs: 0.75rem;   /* 12px */
+            --font-size-sm: 0.875rem;  /* 14px */
+            --font-size-base: 1rem;    /* 16px */
+            --font-size-lg: 1.125rem;  /* 18px */
+            --font-size-xl: 1.25rem;   /* 20px */
+            --font-size-2xl: 1.5rem;   /* 24px */
+
+            /* === カラーシステム（コントラスト比4.5:1以上） === */
+            --color-primary: #FCD34D;
+            --color-primary-hover: #FDE68A;
+            --color-primary-active: #F59E0B;
+            --color-secondary: #3B82F6;
+            --color-secondary-hover: #60A5FA;
+            --color-danger: #EF4444;
+            --color-success: #22C55E;
+            --color-warning: #F59E0B;
+
+            /* === フォーカス表示（アクセシビリティ） === */
+            --focus-ring-color: rgba(59, 130, 246, 0.8);
+            --focus-ring-width: 3px;
+            --focus-ring-offset: 2px;
+
+            /* === シャドウシステム（深度表現） === */
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.15);
+            --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.2);
+            --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.25);
+            --shadow-glow: 0 0 20px rgba(252, 211, 77, 0.4);
+
+            /* === トランジション（パフォーマンス最適化） === */
+            --transition-fast: 100ms ease-out;
+            --transition-normal: 200ms ease-out;
+            --transition-slow: 300ms ease-out;
+            --transition-spring: 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+            /* === ボーダー半径 === */
+            --radius-sm: 4px;
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --radius-xl: 16px;
+            --radius-full: 9999px;
+        }
+
+        /* === グローバルフォーカススタイル（アクセシビリティ） === */
+        *:focus-visible {
+            outline: var(--focus-ring-width) solid var(--focus-ring-color);
+            outline-offset: var(--focus-ring-offset);
+        }
+
+        /* マウスユーザーはフォーカスリングを非表示 */
+        *:focus:not(:focus-visible) {
+            outline: none;
+        }
+
+        /* === モーション低減設定（アクセシビリティ） === */
+        @media (prefers-reduced-motion: reduce) {
+            *,
+            *::before,
+            *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+
+            /* 必要最低限のトランジションのみ維持 */
+            .pokemon-action-btn,
+            .hand-slot,
+            .card-slot {
+                transition: opacity 0.1s ease !important;
+            }
+        }
+
+        /* === ハイコントラストモード対応 === */
+        @media (prefers-contrast: high) {
+            :root {
+                --color-primary: #FFD700;
+                --color-secondary: #00BFFF;
+                --color-danger: #FF4444;
+                --color-success: #00FF00;
+                --focus-ring-width: 4px;
+            }
+
+            .pokemon-action-btn {
+                border-width: 3px;
+            }
+
+            .card-slot,
+            .hand-slot {
+                border: 2px solid rgba(255, 255, 255, 0.5);
+            }
+        }
+
         /* カスタムスタイル */
         body {
             margin: 0;
             font-family: 'Inter', 'Noto Sans JP', sans-serif;
             background: linear-gradient(135deg, #16222A 0%, #3A6073 100%);
-            overflow: hidden; /* Prevent all scrolling */
+            overflow: hidden;
+            /* スムーズなフォントレンダリング */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            /* ゲーム中のテキスト選択を防止 */
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            /* タッチ操作最適化 */
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
         }
 
         .game-wrapper {
             display: grid;
             grid-template-rows: 1fr auto auto;
-            grid-template-areas: 
+            grid-template-areas:
                 "game-board"
                 "hud"
                 "player-hand";
@@ -66,253 +203,355 @@
             gap: var(--viewport-padding);
             /* Safari compatibility fixes */
             -webkit-box-sizing: border-box;
-            overflow: hidden;
+            /* 手札カードの拡大時に切れないようvisibleに変更 */
+            overflow: visible;
         }
 
-        /* CPU手札 - 完全独立システム（新版） */
+        /* ==========================================
+           CPU手札 - 独立配置システム
+           問題修正: pointer-events, perspective
+           ========================================== */
         .cpu-hand-independent {
-            /* ビューポート固定配置 */
-            position: fixed !important;
-            top: 20px !important;
-            left: 50% !important;
-            transform: translateX(-50%) !important;
-            
-            /* サイズと基本設定 */
-            width: 500px !important;
-            height: 120px !important;
-            z-index: var(--z-cpu-hand-base) !important;
-            
-            /* 完全分離設定 */
-            pointer-events: auto !important;
-            overflow: visible !important;
-            background: transparent !important;
-            border-radius: 8px !important;
-            
-            /* 3D設定を無効化 */
-            transform-style: flat !important;
-            perspective: none !important;
-            backface-visibility: visible !important;
+            /* 固定配置（グリッド外） */
+            position: fixed;
+            top: clamp(10px, 2vh, 24px);
+            left: 50%;
+            transform: translateX(-50%);
+
+            /* サイズ */
+            width: clamp(400px, 60vw, 700px);
+            height: clamp(100px, 15vh, 140px);
+            z-index: var(--z-cpu-hand-base);
+
+            /* コンテナ自体は透過、子要素のみクリック可能 */
+            pointer-events: none;
+            overflow: visible;
+            /* 背景なし - 透明 */
+            background: transparent;
+            padding: 8px 0;
+
+            /* 2D表示 - perspective:noneは無効値なので削除 */
+            transform-style: flat;
         }
-        
+
         .cpu-hand-container {
-            width: 100% !important;
-            height: 100% !important;
-            display: flex !important;
-            justify-content: center !important;
-            align-items: center !important;
-            gap: 4px !important; /* Mac Dock風の適度な間隔 */
-            padding: 0 20px !important;
-            box-sizing: border-box !important;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            gap: clamp(4px, 0.8vw, 12px);
+            padding: 0 clamp(16px, 3vw, 40px);
+            box-sizing: border-box;
+            /* コンテナも透過 */
+            pointer-events: none;
         }
 
         #game-stage {
             grid-area: game-board;
             position: relative;
-            perspective: 1200px;
-            -webkit-perspective: 1200px;
-            transform-style: preserve-3d;
-            -webkit-transform-style: preserve-3d;
             display: flex;
-            align-items: flex-start; /* ボードを上から配置 */
+            align-items: flex-start;
             justify-content: center;
-            min-height: 0; /* 重要：grid子要素のサイズ制約を回避 */
-            z-index: var(--z-board); /* ゲームボード基盤レイヤー */
-            padding-top: 22vh; /* プレイマットを手札コンテナと適度に重なるように配置 */
-            /* Safari compatibility fixes */
-            backface-visibility: visible;
-            -webkit-backface-visibility: visible;
+            min-height: 0;
+            z-index: var(--z-board);
+            padding-top: clamp(4vh, 6vh, 8vh);
+            pointer-events: auto;
+            /* NOTE: CSS 3Dは削除 - 3D表示はThree.jsが担当 */
         }
 
         #player-hand-container {
             grid-area: player-hand;
-            height: clamp(180px, 30vh, 250px); /* Mac Dock 1.6x拡大 + 浮上対応 */
-            max-height: 250px; /* 60%拡大に合わせた高さ */
+            /*
+             * 手札エリア高さ - 拡大時のクリッピング防止
+             * カード高さ(182px max) × 1.5倍拡大 = 273px必要
+             * 余裕を持って320pxまで許容
+             */
+            height: clamp(220px, 32vh, 320px);
+            max-height: 320px;
             display: flex;
             justify-content: center;
-            align-items: flex-start;
+            /* 下揃えでカードを底に配置、拡大は上方向に */
+            align-items: flex-end;
             position: relative;
             z-index: var(--z-hand-area);
-            margin-bottom: 15px;
-            overflow: visible; /* カードが容器外に出ることを許可 */
+            /* 下部余白削除 */
+            margin-bottom: 0;
+            /* 上方向へのオーバーフローを許可 */
+            overflow: visible;
+            /* 透明部分がクリックをブロックしないよう設定 */
+            pointer-events: none;
+        }
+
+        /* 手札の実際のカード部分はクリック可能 */
+        #player-hand-container #player-hand,
+        #player-hand-container .hand-slot {
             pointer-events: auto;
         }
-        
+
         .game-footer {
             grid-area: hud;
-            height: clamp(60px, 8vh, 100px);
+            /* HUDエリア高さ - コンパクトだが操作しやすい */
+            height: clamp(50px, 7vh, 80px);
+            min-height: 50px;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 4px 16px;
+            /* 背景なし - 透明 */
+            background: transparent;
+            /* 明示的にクリック可能に */
+            pointer-events: auto;
         }
 
         /* 統合されたFloating Action HUD - グリッドレイアウトに統合 */
         #floating-action-hud {
-            position: static; /* グリッドレイアウトに従う */
+            position: static;
             margin: 0 auto;
-            width: auto;
-            max-width: 500px;
+            width: 100%;
+            max-width: 700px;
             z-index: var(--z-floating-hud);
             transform-origin: center;
             animation: fadeInScale var(--anim-normal) ease-out;
             /* フレックス配置設定 */
             display: flex;
             flex-direction: row;
-            gap: 12px;
+            flex-wrap: wrap;
+            gap: clamp(8px, 1.5vw, 16px);
             justify-content: center;
             align-items: center;
+            padding: 0 8px;
+            /* 明示的にクリック可能に */
+            pointer-events: auto;
         }
 
         /* ==========================================
            Z-INDEX統一管理システム
            ========================================== */
-          :root {
-              /* レイアウト用変数 */
-              --side-padding: 16px;
-              --card-height: clamp(120px, 22vh, 180px);
-              --hand-extra-gap: 24px;
-              --hand-height: calc(var(--card-height) + var(--hand-extra-gap));
-              --vertical-gap: 8px;
-              --overlap-cpu: clamp(8px, 2.5vh, 20px);
-              --overlap-player: clamp(16px, 4vh, 36px);
-              --footer-height: 80px; /* New variable for HUD area */
-              --board-margin-y: 0.5vh; /* Reduced vertical margin for the board */
+        :root {
+            /* レイアウト用変数 */
+            --side-padding: 16px;
+            --card-height: clamp(120px, 22vh, 180px);
+            --hand-extra-gap: 24px;
+            --hand-height: calc(var(--card-height) + var(--hand-extra-gap));
+            --vertical-gap: 8px;
+            --overlap-cpu: clamp(8px, 2.5vh, 20px);
+            --overlap-player: clamp(16px, 4vh, 36px);
+            --footer-height: 80px;
+            /* New variable for HUD area */
+            --board-margin-y: 0.5vh;
+            /* Reduced vertical margin for the board */
 
-              /* 動的手札サイズ（ディスプレイ対応） */
-              --card-width: clamp(60px, min(8vw, 6vh), 96px);
-              --hand-card-width: clamp(60px, min(12vw, 9vh), 120px);
-              --hand-card-height: clamp(84px, min(16.8vw, 12.6vh), 168px);
-              /* 手札間隔もレスポンシブに */
-              --hand-gap: clamp(2px, 0.5vw, 8px);
+            /* 動的手札サイズ（ディスプレイ対応） - より大きく視認性向上 */
+            --card-width: clamp(65px, min(9vw, 7vh), 110px);
+            --hand-card-width: clamp(70px, min(11vw, 10vh), 130px);
+            --hand-card-height: clamp(98px, min(15.4vw, 14vh), 182px);
+            /* 手札間隔もレスポンシブに */
+            --hand-gap: clamp(4px, 0.6vw, 10px);
 
-              /* プレイマット設定 - 大きく、立体的に */
-              --playmat-size: min(80vh, 80vw);
-              --board-rotation-x: 42deg;     /* 適度な3D傾斜効果 */
-              /* 3D設定 - より立体感を強調、少し上に移動 */
-              --tz-game-board: -160px;
+            /* プレイマット設定 - 画面を最大限活用 */
+            --playmat-size: min(72vh, 80vw);
 
-              /* GPUアクセラレーション最適化 */
-              --gpu-acceleration: translateZ(0);
-              --gpu-layer: translateZ(0);
-              --will-change: transform, opacity;
-              --performance-will-change: transform, opacity;
+            /*
+             * NOTE: CSS 3D変数 (--board-rotation-x, --tz-game-board) は削除
+             * 3D表示はThree.js (src/js/three/scene.js) が担当
+             */
 
-              /* アニメーションタイミング変数 */
-              --anim-fast: 200ms;
-              --anim-normal: 400ms;
-              --anim-slow: 800ms;
-              --anim-combat: 600ms;
-              --anim-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
-              --anim-ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
-              --anim-ease-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
-              --anim-enabled: 1;
-              --anim-particles: 1;
-              --shake-intensity: 1;
+            /* アニメーションタイミング変数 */
+            --anim-fast: 200ms;
+            --anim-normal: 400ms;
+            --anim-slow: 800ms;
+            --anim-combat: 600ms;
+            --anim-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+            --anim-ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            --anim-ease-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            --anim-enabled: 1;
+            --anim-particles: 1;
+            --shake-intensity: 1;
 
-              /* ビューポート余白 */
-              --viewport-padding: 8px;
-          }
+            /* ビューポート余白 */
+            --viewport-padding: 8px;
+        }
 
 
         /* 🎬 ゲームフローアニメーション */
         .game-start-flash {
             animation: gameStartFlash var(--anim-slow) ease-out;
         }
-        
+
         @keyframes gameStartFlash {
-            0% { filter: brightness(1); }
-            50% { filter: brightness(1.3) saturate(1.2); }
-            100% { filter: brightness(1); }
+            0% {
+                filter: brightness(1);
+            }
+
+            50% {
+                filter: brightness(1.3) saturate(1.2);
+            }
+
+            100% {
+                filter: brightness(1);
+            }
         }
-        
+
         .turn-ending {
             animation: turnEnding var(--anim-normal) ease-out;
             opacity: 0.7;
         }
-        
+
         @keyframes turnEnding {
-            from { transform: scale(1); opacity: 1; }
-            to { transform: scale(0.95); opacity: 0.7; }
+            from {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            to {
+                transform: scale(0.95);
+                opacity: 0.7;
+            }
         }
-        
+
         .turn-starting {
             animation: turnStarting var(--anim-normal) ease-out;
         }
-        
+
         @keyframes turnStarting {
-            from { transform: scale(0.95); opacity: 0.7; }
-            to { transform: scale(1); opacity: 1; }
+            from {
+                transform: scale(0.95);
+                opacity: 0.7;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
-        
+
         .attacking {
             animation: attackingPulse var(--anim-slow) ease-in-out;
         }
-        
+
         @keyframes attackingPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.05); filter: drop-shadow(0 0 15px rgba(255, 100, 100, 0.8)); }
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+                filter: drop-shadow(0 0 15px rgba(255, 100, 100, 0.8));
+            }
         }
-        
+
         .highlight-available {
             animation: availableHighlight calc(var(--anim-slow) * 2.5) infinite;
         }
-        
+
         @keyframes availableHighlight {
-            0%, 100% { box-shadow: 0 0 0 rgba(59, 130, 246, 0); }
-            50% { box-shadow: 0 0 20px rgba(59, 130, 246, 0.8); }
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(59, 130, 246, 0);
+            }
+
+            50% {
+                box-shadow: 0 0 20px rgba(59, 130, 246, 0.8);
+            }
         }
-        
+
         /* 🏆 勝利演出 */
         .victory-celebration {
             animation: victoryCelebration calc(var(--anim-slow) * 2.5) ease-out;
         }
-        
+
         @keyframes victoryCelebration {
-            0% { transform: scale(1) rotate(0deg); }
-            25% { transform: scale(1.1) rotate(5deg); }
-            50% { transform: scale(1.2) rotate(-5deg); }
-            75% { transform: scale(1.1) rotate(3deg); }
-            100% { transform: scale(1) rotate(0deg); }
+            0% {
+                transform: scale(1) rotate(0deg);
+            }
+
+            25% {
+                transform: scale(1.1) rotate(5deg);
+            }
+
+            50% {
+                transform: scale(1.2) rotate(-5deg);
+            }
+
+            75% {
+                transform: scale(1.1) rotate(3deg);
+            }
+
+            100% {
+                transform: scale(1) rotate(0deg);
+            }
         }
-        
+
         /* ⚡ フェーズ遷移 */
         .phase-transition {
             animation: phaseTransition var(--anim-fast) ease-out;
         }
-        
+
         @keyframes phaseTransition {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
-        
+
         /* 💫 エラー表示 */
         .error-shake {
             animation: errorShake var(--anim-normal) ease-in-out;
         }
-        
+
         @keyframes errorShake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-5px); }
-            75% { transform: translateX(5px); }
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            25% {
+                transform: translateX(-5px);
+            }
+
+            75% {
+                transform: translateX(5px);
+            }
         }
 
         #game-board {
-            /* シンプルな3D transform - クロスブラウザー対応 */
-            transform: translateZ(var(--tz-game-board)) rotateX(var(--board-rotation-x));
-            transform-style: preserve-3d;
+            /*
+             * DOM Game Board - イベント処理・フォールバック用
+             * 3D表示はThree.js (#three-container) が担当
+             * Three.js有効時は非表示になる
+             */
+            transform: none;
             position: relative;
-            /* プレイマットサイズ - 正方形で固定 */
             width: var(--playmat-size);
             height: var(--playmat-size);
             aspect-ratio: 1;
-            margin: -10px auto 0 auto; /* プレイマットを最大限上に移動（40px → -10px = 50px上昇） */
+            margin: 0 auto;
             overflow: visible;
-            /* 基本的な最適化のみ */
-            transform-origin: center;
-            backface-visibility: visible;
-            will-change: transform;
+            pointer-events: auto;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Three.js有効時にDOMボードを非表示 */
+        body.three-active #game-board {
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        body.three-active #three-container {
             pointer-events: auto;
         }
-        
+
         /* Ensure card slots are clickable at all zoom levels */
         #game-board .card-slot {
             pointer-events: auto;
@@ -328,10 +567,12 @@
             left: 0;
             width: 100%;
             height: 100%;
-            object-fit: cover; /* 画像をコンテナサイズに完全一致させる */
+            object-fit: cover;
+            /* 画像をコンテナサイズに完全一致させる */
             object-position: center;
             z-index: var(--z-board-bg);
-            pointer-events: none !important; /* 背景画像のクリック干渉を完全防止 */
+            pointer-events: none !important;
+            /* 背景画像のクリック干渉を完全防止 */
             filter: contrast(1.05) brightness(1.02);
             /* Safari compatibility fixes */
             transform: translateZ(0);
@@ -343,49 +584,43 @@
 
 
         /* ===== インタラクション統一ルール ===== */
-        
-        /* ボード基盤 - 全てのプレースホルダーでクリック可能 */
+
+        /* ボード基盤 - イベント委譲で対応（ボード自体はクリック不可） */
         .player-board.player-self,
         .player-board.opponent-board {
             z-index: var(--z-board);
-            pointer-events: auto; /* プレースホルダーのクリックを確実に有効化 */
+            pointer-events: none;
+            /* イベント委譲: 子要素のみクリック可能 */
         }
-        
-        /* プレイヤーフィールド（下部） - 最前面配置でクリック優先 */
+
+        /* プレイヤーフィールド（下部） - フラット配置 */
         .player-board.player-self {
-            pointer-events: auto !important;
             z-index: var(--z-board) !important;
-            /* 3D空間で最前面に配置（相手より手前） */
-            transform: translateZ(var(--tz-player-field)) !important;
+            /* CSS 3D transform削除 - Three.jsが3D担当 */
         }
-        
+
         .player-board.player-self .card-slot {
             pointer-events: auto !important;
             z-index: var(--z-board) !important;
-            /* プレイヤースロットを更に手前に */
-            transform: translateZ(var(--tz-player-slots)) !important;
         }
-        
-        /* 相手フィールド（上部） - プレイヤーより奥に配置 */
+
+        /* 相手フィールド（上部） - フラット配置 */
         .player-board.opponent-board {
-            pointer-events: auto !important;
             z-index: var(--z-board) !important;
-            /* 3D空間でプレイヤーより奥に配置 */
-            transform: translateZ(var(--tz-opponent-field)) !important;
+            /* CSS 3D transform削除 - Three.jsが3D担当 */
         }
-        
+
         .player-board.opponent-board .card-slot {
             pointer-events: auto !important;
             z-index: var(--z-board) !important;
-            /* 相手スロットもプレイヤーより奥 */
-            transform: translateZ(var(--tz-opponent-slots)) !important;
         }
-        
+
         /* カードプレースホルダー - 常にクリック可能 */
         .card-slot {
-            pointer-events: auto; /* 他の干渉を受けない */
+            pointer-events: auto;
+            /* 他の干渉を受けない */
         }
-        
+
         /* 装飾要素 - クリックを通す */
         .card-slot::before,
         .card-slot::after,
@@ -393,28 +628,51 @@
         .card-image::after {
             pointer-events: none;
         }
-        
+
         /* プレイマットとプレースホルダーの座標整合を優先（下部オフセットを撤廃） */
         .player-board.player-self {
             bottom: 0;
         }
-        
-        /* カードスロット - 統合設定 */
+
+        /* カードスロット - 統合設定（UI/UX最適化） */
         .card-slot {
-            border-radius: 6px;
-            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+            border-radius: var(--radius-md);
+            /* スムーズなトランジション */
+            transition:
+                box-shadow var(--transition-normal),
+                border-color var(--transition-fast);
+            box-shadow: var(--shadow-md);
             position: absolute;
-            z-index: var(--z-board); /* Stadiumと同等のレイヤーに統一 */
+            z-index: var(--z-board);
             pointer-events: auto;
-            min-width: 20px;
-            min-height: 28px;
+            /* タッチターゲット最小サイズ確保 */
+            min-width: var(--touch-target-min);
+            min-height: calc(var(--touch-target-min) * 1.4);
             overflow: visible;
-            transform-style: preserve-3d;
-            /* Stadiumと同等の3D位置（背景より前） */
-            transform: translateZ(var(--tz-card-slot));
+            /* CSS 3D transform削除 - Three.jsが3D担当 */
+            /* タッチ操作最適化 */
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            cursor: pointer;
         }
-        
+
+        /* カードスロット - フォーカス可能に（キーボード操作） */
+        .card-slot[tabindex]:focus-visible {
+            outline: var(--focus-ring-width) solid var(--focus-ring-color);
+            outline-offset: var(--focus-ring-offset);
+        }
+
+        /* カードスロット - 空の状態のビジュアルヒント */
+        .card-slot:empty::after,
+        .card-slot.empty::after {
+            content: '';
+            position: absolute;
+            inset: 4px;
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: var(--radius-sm);
+            pointer-events: none;
+        }
+
         /* 手札エリア（下部、フロー内） - 3D変換を無効化して平面表示 */
         #player-hand {
             width: 100%;
@@ -425,80 +683,95 @@
             flex-wrap: nowrap;
             gap: var(--hand-gap);
             pointer-events: auto;
-            transform: none !important; /* 3D変換を完全無効化 */
-            transform-style: flat !important; /* 平面表示を強制 */
-            z-index: var(--z-hand); /* プレイヤー手札レイヤー */
-            position: relative !important; /* position: fixed を上書きして relative に */
+            transform: none !important;
+            /* 3D変換を完全無効化 */
+            transform-style: flat !important;
+            /* 平面表示を強制 */
+            z-index: var(--z-hand);
+            /* プレイヤー手札レイヤー */
+            position: relative !important;
+            /* position: fixed を上書きして relative に */
             /* 中央配置を確実にする */
             margin: 0 auto;
             box-sizing: border-box;
-            left: auto !important; /* fixed position の left 値を無効化 */
-            top: auto !important; /* fixed position の top 値を無効化 */
+            left: auto !important;
+            /* fixed position の left 値を無効化 */
+            top: auto !important;
+            /* fixed position の top 値を無効化 */
         }
 
         /* 手札カード - クリック確実性保証とアクティブ化 */
         #player-hand .hand-slot {
-            pointer-events: auto; /* 確実にクリック可能 */
-            cursor: pointer; /* 視覚的フィードバック */
+            pointer-events: auto;
+            /* 確実にクリック可能 */
+            cursor: pointer;
+            /* 視覚的フィードバック */
             /* Mac Dock効果のために基本transformは無効化しない */
-            transform-style: flat !important; /* 平面表示を強制 */
+            transform-style: flat !important;
+            /* 平面表示を強制 */
             backface-visibility: visible;
-            will-change: auto; /* GPU加速を無効化 */
+            will-change: auto;
+            /* GPU加速を無効化 */
             /* 動的サイズ調整 */
             width: var(--hand-card-width);
             height: var(--hand-card-height);
-            margin: 0; /* マージンをリセット */
-            transition: all 0.2s ease; /* アクティブ化アニメーション */
+            margin: 0;
+            /* マージンをリセット */
+            transition: all 0.2s ease;
+            /* アクティブ化アニメーション */
         }
-        
+
         /* 手札カードアクティブ状態 - 3D変換を無効化 */
         #player-hand .hand-slot.active {
-            transform: translateY(-15px) scale(1.05) !important; /* 3D変換を除去、Y移動とスケールのみ */
+            transform: translateY(-15px) scale(1.05) !important;
+            /* 3D変換を除去、Y移動とスケールのみ */
             box-shadow: 0 8px 25px rgba(255, 215, 0, 0.6);
             border: 2px solid #ffd700;
-            z-index: calc(var(--z-hand) + 10); /* アクティブカードを前面に */
+            z-index: calc(var(--z-hand) + 10);
+            /* アクティブカードを前面に */
         }
-        
+
         /* CPU手札 - 自然な扇形配置で手札らしく表示 */
         #cpu-hand.cpu-hand-scaling {
             display: flex;
-            align-items: flex-end; /* 底辺揃えで扇形を作る */
+            align-items: flex-end;
             justify-content: center;
-            gap: -8px; /* 負のギャップで重なりを作る */
-            pointer-events: auto; /* CPU手札のクリック判定を有効化 */
-            transform: none !important; /* 3D変換を完全に削除 */
-            transform-style: flat !important; /* 3D空間を無効化 */
-            transform-origin: center bottom; /* 扇の中心を下に */
+            gap: 4px;
+            /* コンテナは透過、子要素のみクリック可能 */
+            pointer-events: none;
+            transform: none;
+            transform-style: flat;
+            transform-origin: center bottom;
             z-index: var(--z-cpu-hand-base);
             width: 100%;
             height: 100%;
-            overflow: visible !important;
-            perspective: none !important; /* perspectiveの継承を阻止 */
-            padding: 0 20px; /* 端にゆとりを作る */
-            /* 手札全体の雰囲気向上 */
-            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15)); /* 控えめな影 */
+            overflow: visible;
+            /* perspective:noneは無効値なので削除 */
+            padding: 0 20px;
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
         }
-        
-        /* CPU手札のhand-slotクラス - 扇形配置で自然な手札表示 */
+
+        /* CPU手札のhand-slotクラス - サイズと配置の最適化 */
         #cpu-hand .hand-slot {
-            width: var(--hand-card-width) !important; /* プレイヤー手札と同等サイズ */
-            height: var(--hand-card-height) !important;
-            border-radius: 8px;
-            background-color: rgba(30, 30, 30, 0.9) !important; /* 少し濃いめの背景 */
-            border: 1px solid rgba(255, 215, 0, 0.3) !important; /* 金色のボーダーで手札感 */
-            z-index: var(--z-board);
-            pointer-events: none;
+            /* CPU手札はプレイヤーよりやや小さめ（遠近感） */
+            width: calc(var(--hand-card-width) * 0.85);
+            height: calc(var(--hand-card-height) * 0.85);
+            border-radius: var(--radius-md);
+            /* 色コントラスト改善: 枠線を見やすく */
+            background-color: rgba(25, 25, 35, 0.95);
+            border: 2px solid rgba(255, 215, 0, 0.4);
+            z-index: var(--z-cpu-hand-base);
+            /* クリック可能に（親コンテナはnone） */
+            pointer-events: auto;
             position: relative;
             flex-shrink: 0;
-            display: flex !important;
-            visibility: visible !important;
-            opacity: 1 !important;
-            transform-origin: bottom center; /* Mac Dock風の拡大基点 */
-            transform-style: flat !important;
-            /* 個々のカードの視覚的改善 */
-            transition: transform 0.2s ease-out; /* ホバー時のアニメーション用 */
-            box-shadow: none; /* 影を削除 */
-            /* 個々のカードに扇形の回転を適用（nth-childで調整） */
+            display: flex;
+            visibility: visible;
+            opacity: 1;
+            transform-origin: bottom center;
+            transform-style: flat;
+            transition: transform var(--transition-normal);
+            box-shadow: var(--shadow-md);
         }
 
         /* CPU手札をプレイヤーと同様のMac Dock効果に統一 */
@@ -506,23 +779,24 @@
             transition: transform 140ms ease, filter 140ms ease, z-index 140ms ease !important;
             will-change: transform !important;
             transform-origin: bottom center !important;
-            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2)); /* 軽めの影 */
+            filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+            /* 軽めの影 */
             position: relative;
             z-index: var(--z-highlight);
         }
-        
+
         /* CPU手札のホバー・アクティブ効果 */
         #cpu-hand .hand-slot {
             transition: transform 0.2s ease, box-shadow 0.2s ease, border 0.2s ease;
             border-radius: 8px;
         }
-        
+
         #cpu-hand .hand-slot.active {
             transform: translateY(-8px) scale(1.05);
             box-shadow: 0 8px 25px rgba(255, 215, 0, 0.6);
             border: 2px solid #ffd700;
         }
-        
+
         #cpu-hand .hand-slot:hover:not(.active) {
             transform: translateY(-2px) scale(1.02);
             box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
@@ -530,28 +804,140 @@
 
         /* CPU手札の向き制御（統一システムで既に処理済み - 上記参照） */
 
-        /* 画面サイズに応じた手札の自動調整 */
+        /* ========================================
+           レスポンシブ対応 - 画面サイズ別最適化
+           ======================================== */
+
+        /* タブレット横向き / 小型デスクトップ */
+        @media (max-width: 1200px) {
+            :root {
+                --hand-card-width: clamp(60px, 10vw, 100px);
+                --hand-card-height: clamp(84px, 14vw, 140px);
+                --hand-gap: clamp(3px, 0.5vw, 8px);
+                --playmat-size: min(70vh, 90vw);
+            }
+
+            #game-status-panel {
+                width: clamp(200px, 25vw, 280px);
+            }
+        }
+
+        /* タブレット縦向き */
         @media (max-width: 768px) {
             :root {
-                --hand-card-width: clamp(50px, 15vw, 90px);
-                --hand-card-height: clamp(70px, 21vw, 126px);
-                --hand-gap: clamp(1px, 0.3vw, 4px);
+                --hand-card-width: clamp(55px, 14vw, 85px);
+                --hand-card-height: clamp(77px, 19.6vw, 119px);
+                --hand-gap: clamp(2px, 0.4vw, 6px);
+                --playmat-size: min(60vh, 95vw);
+                /* 3D設定はThree.js (scene.js) で管理 */
+            }
+
+            .cpu-hand-independent {
+                width: clamp(320px, 80vw, 500px) !important;
+                height: clamp(80px, 12vh, 110px) !important;
+            }
+
+            #game-status-panel {
+                width: clamp(180px, 40vw, 260px);
+                top: auto;
+                bottom: clamp(200px, 35vh, 280px);
+                right: 8px;
+                max-height: 45vh;
+            }
+
+            .game-footer {
+                height: clamp(45px, 8vh, 70px);
             }
         }
 
+        /* スマートフォン */
         @media (max-width: 480px) {
             :root {
-                --hand-card-width: clamp(45px, 18vw, 75px);
-                --hand-card-height: clamp(63px, 25.2vw, 105px);
-                --hand-gap: clamp(1px, 0.2vw, 3px);
+                --hand-card-width: clamp(48px, 18vw, 70px);
+                --hand-card-height: clamp(67px, 25.2vw, 98px);
+                --hand-gap: clamp(1px, 0.3vw, 4px);
+                --playmat-size: min(55vh, 98vw);
+                /* 3D設定はThree.js (scene.js) で管理 */
+            }
+
+            .cpu-hand-independent {
+                width: clamp(280px, 90vw, 400px) !important;
+                height: clamp(70px, 11vh, 95px) !important;
+                top: 8px !important;
+            }
+
+            #player-hand-container {
+                height: clamp(120px, 18vh, 160px);
+                margin-bottom: 8px;
+            }
+
+            #game-status-panel {
+                width: clamp(160px, 50vw, 220px);
+                font-size: 0.7rem;
+                padding: 0.3rem;
+            }
+
+            .pokemon-action-btn {
+                padding: 10px 14px;
+                font-size: 0.8rem;
+                min-width: 110px;
+            }
+
+            .game-footer {
+                height: clamp(40px, 7vh, 60px);
             }
         }
 
+        /* 大画面デスクトップ / 4K */
         @media (min-width: 1920px) {
             :root {
-                --hand-card-width: clamp(90px, 8vw, 140px);
-                --hand-card-height: clamp(126px, 11.2vw, 196px);
-                --hand-gap: clamp(4px, 0.8vw, 12px);
+                --hand-card-width: clamp(100px, 7vw, 150px);
+                --hand-card-height: clamp(140px, 9.8vw, 210px);
+                --hand-gap: clamp(6px, 0.8vw, 14px);
+                --playmat-size: min(80vh, 75vw);
+            }
+
+            .cpu-hand-independent {
+                width: clamp(600px, 50vw, 900px) !important;
+                height: clamp(130px, 14vh, 180px) !important;
+            }
+
+            #game-status-panel {
+                width: clamp(280px, 18vw, 380px);
+            }
+        }
+
+        /* 縦長画面（スマホ縦向き）の特別対応 */
+        @media (max-aspect-ratio: 3/4) {
+            :root {
+                --playmat-size: min(50vh, 95vw);
+                /* 3D設定はThree.js (scene.js) で管理 */
+            }
+
+            #game-stage {
+                padding-top: clamp(12vh, 15vh, 18vh);
+            }
+
+            #game-status-panel {
+                position: fixed;
+                top: auto;
+                bottom: clamp(180px, 30vh, 250px);
+                left: 50%;
+                right: auto;
+                transform: translateX(-50%);
+                width: clamp(240px, 70vw, 320px);
+                max-height: 30vh;
+            }
+        }
+
+        /* 横長ワイド画面の特別対応 */
+        @media (min-aspect-ratio: 21/9) {
+            :root {
+                --playmat-size: min(85vh, 60vw);
+            }
+
+            .cpu-hand-independent {
+                width: clamp(500px, 45vw, 800px) !important;
             }
         }
 
@@ -565,7 +951,8 @@
         /* アニメーション準備中のカードを初期状態で非表示にする */
         .is-preparing-animation .relative {
             opacity: 0;
-            transition: none; /* 意図しないトランジションを防止 */
+            transition: none;
+            /* 意図しないトランジションを防止 */
         }
 
 
@@ -583,7 +970,8 @@
             width: 100%;
             height: 100%;
             pointer-events: none;
-            z-index: var(--z-deck-effects); /* 影要素全体をカード背面に */
+            z-index: var(--z-deck-effects);
+            /* 影要素全体をカード背面に */
         }
 
         .deck-stack {
@@ -627,15 +1015,16 @@
             transform: translateZ(1px);
         }
 
-        
+
         /* カードスロットホバー効果の復旧 */
         .card-slot:hover {
             transform: translateZ(5px) translateY(-8px) scale(1.08);
             border-color: #4dd0fd;
-            box-shadow: 0 0 25px rgba(77, 208, 253, 0.5);
+            box-shadow:
+                0 0 25px rgba(77, 208, 253, 0.5),
+                0 15px 30px rgba(0, 0, 0, 0.3);
             z-index: var(--z-card-hover);
         }
-        
 
         /* JSで制御するホバーエフェクト用クラス */
         .slot-hover-effect {
@@ -645,83 +1034,144 @@
             z-index: var(--z-hand-hover);
         }
 
-
-        
-
         /* --- カード画像の基本スタイル --- */
         .card-image {
             width: 100%;
             height: 100%;
             border-radius: 8px;
             object-fit: cover;
-            transition: transform 0.2s ease-out, opacity 0.3s ease;
+            /* 注: transform の transition は除外（回転が即座に適用されるように） */
+            transition: opacity 0.3s ease, filter 0.2s ease;
+            /* カード画像にシャイン効果用の位置コンテキスト */
+            position: relative;
         }
 
-        /* === シンプル化：統一カード向き制御システム === */
-        
-        /* CPUフィールドカードの反転（手札以外） */
-        .opponent-board [data-orientation="flipped"] .card-image {
+        /* カード画像のホバーシャイン効果 */
+        .card-slot:hover .card-image {
+            filter: brightness(1.08) contrast(1.02);
+        }
+
+        /* カードシャイン（ホログラフィック風）オーバーレイ */
+        .card-slot::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            border-radius: 8px;
+            background: linear-gradient(
+                135deg,
+                transparent 0%,
+                transparent 40%,
+                rgba(255, 255, 255, 0.1) 45%,
+                rgba(255, 255, 255, 0.2) 50%,
+                rgba(255, 255, 255, 0.1) 55%,
+                transparent 60%,
+                transparent 100%
+            );
+            opacity: 0;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        .card-slot:hover::after {
+            opacity: 1;
+            animation: card-shine 0.6s ease-out;
+        }
+
+        @keyframes card-shine {
+            0% {
+                background-position: -100% -100%;
+                opacity: 0;
+            }
+            50% {
+                opacity: 1;
+            }
+            100% {
+                background-position: 100% 100%;
+                opacity: 0;
+            }
+        }
+
+        /* レアカード用グロー効果（EX/V/VMAX等） */
+        .card-slot.rare-card {
+            animation: rare-glow 2s ease-in-out infinite;
+        }
+
+        @keyframes rare-glow {
+            0%, 100% {
+                box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+            }
+            50% {
+                box-shadow: 0 0 25px rgba(255, 215, 0, 0.6), 0 0 40px rgba(255, 215, 0, 0.3);
+            }
+        }
+
+        /* カード選択可能状態のパルス効果 */
+        .card-slot.selectable {
+            animation: selectable-pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes selectable-pulse {
+            0%, 100% {
+                border-color: rgba(77, 208, 253, 0.5);
+                box-shadow: 0 0 10px rgba(77, 208, 253, 0.3);
+            }
+            50% {
+                border-color: rgba(77, 208, 253, 1);
+                box-shadow: 0 0 20px rgba(77, 208, 253, 0.6);
+            }
+        }
+
+        /* === 統一カード向き制御システム === */
+        /* スロット（.card-slot）の data-orientation に基づいて回転 */
+
+        /* CPUフィールド: flipped スロット自体とその中身を180度回転 */
+        .opponent-board .card-slot[data-orientation="flipped"] {
             transform: rotate(180deg) !important;
         }
-        
-        /* プレイヤー側とCPU手札は常に正位置 */
-        .player-self [data-orientation="flipped"] .card-image,
-        #player-hand [data-orientation="flipped"] .card-image,
-        #cpu-hand [data-orientation="flipped"] .card-image {
-            transform: none !important;
+
+        /* flipped スロット内のカード画像も回転（インラインスタイルを上書き） */
+        .opponent-board .card-slot[data-orientation="flipped"] .card-image,
+        .opponent-board .card-slot[data-orientation="flipped"] .card-back,
+        .opponent-board .card-slot[data-orientation="flipped"] .card-placeholder {
+            transform: rotate(180deg) !important;
         }
 
-        /* サイドカード（Prize）は常に正位置（CPU含む） */
-        [data-zone="Prize"] [data-orientation="flipped"] .card-image,
-        .side-right [data-orientation="flipped"] .card-image,
-        .side-left [data-orientation="flipped"] .card-image {
-            transform: none !important;
-        }
-        
-        /* 全ての正位置カードは変換なし */
-        [data-orientation="upright"] .card-image {
+        /* upright スロットは回転なし */
+        .card-slot[data-orientation="upright"],
+        .opponent-board .card-slot[data-orientation="upright"] {
             transform: none;
         }
 
-        /* 旧クラス制御（互換性維持） */
-        .player-card .card-image,
-        .cpu-card-no-rotate .card-image {
-            transform: translateZ(0);
+        .card-slot[data-orientation="upright"] .card-image,
+        .card-slot[data-orientation="upright"] .card-back,
+        .card-slot[data-orientation="upright"] .card-placeholder {
+            transform: none !important;
         }
 
-        .cpu-card .card-image {
-            transform: rotateX(180deg) translateZ(0);
-            transform-style: preserve-3d;
+        /* プレイヤー側の要素は回転なし（スロット自体のtransformは別途定義済み） */
+        .player-self .card-slot .card-image,
+        .player-self .card-slot .card-back,
+        .player-self .card-slot .card-placeholder,
+        #player-hand .card-image,
+        #cpu-hand .card-image {
+            transform: none !important;
         }
 
-        /* data-orientation対応ホバー効果 */
-        .card-slot:hover [data-orientation="upright"] .card-image,
-        .card-slot:hover [data-orientation="upright"] {
-            transform: var(--gpu-layer) translateZ(20px) !important;
-            will-change: var(--performance-will-change);
+        /* ホバー効果: 正位置 */
+        .card-slot[data-orientation="upright"]:hover {
+            transform: scale(1.05);
+            z-index: 100;
         }
 
-        .card-slot:hover [data-orientation="flipped"] .card-image,
-        .card-slot:hover [data-orientation="flipped"] {
-            transform: var(--gpu-layer) rotateX(180deg) translateZ(20px) !important;
-            will-change: var(--performance-will-change);
+        /* ホバー効果: 反転 */
+        .card-slot[data-orientation="flipped"]:hover {
+            transform: rotate(180deg) scale(1.05);
+            z-index: 100;
         }
-
-        /* 旧クラス対応ホバー効果（互換性維持） */
-        .card-slot:hover .player-card .card-image,
-        .card-slot:hover .cpu-card-no-rotate .card-image {
-            transform: var(--gpu-layer) translateZ(20px);
-            will-change: var(--performance-will-change);
-        }
-
-        .card-slot:hover .cpu-card .card-image {
-            transform: var(--gpu-layer) rotateX(180deg) translateZ(20px);
-            will-change: var(--performance-will-change);
-        }
-
-        /* サイドカード専用ホバー効果は廃止。共通の .card-slot:hover を適用 */
-
-        
 
         .deck-container:hover {
             transform: var(--gpu-layer) translateY(-6px) scale(1.05);
@@ -745,6 +1195,7 @@
                 transform: translateY(-100px) rotate(10deg);
                 opacity: 0;
             }
+
             100% {
                 transform: translateY(0) rotate(0deg);
                 opacity: 1;
@@ -757,6 +1208,7 @@
                 transform: translateY(-100px) rotate(10deg);
                 opacity: 1;
             }
+
             100% {
                 transform: translateY(0) rotate(0deg);
                 opacity: 1;
@@ -767,8 +1219,10 @@
         @keyframes dealPlayerHandCard {
             0% {
                 transform: translateY(30px) scale(0.9);
-                opacity: 0; /* Start invisible */
+                opacity: 0;
+                /* Start invisible */
             }
+
             100% {
                 transform: translateY(0) scale(1);
                 opacity: 1;
@@ -776,11 +1230,15 @@
         }
 
         /* サイドカード配布アニメーション（上から） */
-        @keyframes prizeDealLeft { /* Player's side (left) */
+        @keyframes prizeDealLeft {
+
+            /* Player's side (left) */
             0% {
                 transform: translateY(-50px) rotate(-5deg) scale(0.8);
-                opacity: 0; /* Start invisible */
+                opacity: 0;
+                /* Start invisible */
             }
+
             100% {
                 transform: translateY(0) rotate(0deg) scale(1);
                 opacity: 1;
@@ -788,11 +1246,15 @@
         }
 
         /* サイドカード配布アニメーション（下から） */
-        @keyframes prizeDealRight { /* CPU's side (right) */
+        @keyframes prizeDealRight {
+
+            /* CPU's side (right) */
             0% {
                 transform: translateY(50px) rotate(5deg) scale(0.8);
-                opacity: 0; /* Start invisible */
+                opacity: 0;
+                /* Start invisible */
             }
+
             100% {
                 transform: translateY(0) rotate(0deg) scale(1);
                 opacity: 1;
@@ -804,10 +1266,12 @@
                 transform: scale(1.5) rotate(15deg);
                 opacity: 0;
             }
+
             50% {
                 transform: scale(1.2) rotate(5deg);
                 opacity: 0.7;
             }
+
             100% {
                 transform: scale(1) rotate(0deg);
                 opacity: 1;
@@ -818,46 +1282,90 @@
             0% {
                 transform: scale(1) rotate(0deg);
             }
+
             50% {
                 transform: scale(1.1) rotate(5deg);
             }
+
             100% {
                 transform: scale(1) rotate(0deg);
             }
         }
 
         @keyframes attackForward {
-            0% { transform: translateX(0) scale(1); }
-            30% { transform: translateX(20px) scale(1.1); }
-            60% { transform: translateX(10px) scale(1.05); }
-            100% { transform: translateX(0) scale(1); }
+            0% {
+                transform: translateX(0) scale(1);
+            }
+
+            30% {
+                transform: translateX(20px) scale(1.1);
+            }
+
+            60% {
+                transform: translateX(10px) scale(1.05);
+            }
+
+            100% {
+                transform: translateX(0) scale(1);
+            }
         }
 
         @keyframes damageShake {
-            0%, 100% { transform: translateX(0) translateY(0); }
-            10% { transform: translateX(-5px) translateY(-2px); }
-            20% { transform: translateX(5px) translateY(2px); }
-            30% { transform: translateX(-3px) translateY(-1px); }
-            40% { transform: translateX(3px) translateY(1px); }
-            50% { transform: translateX(-2px) translateY(-1px); }
-            60% { transform: translateX(2px) translateY(1px); }
+
+            0%,
+            100% {
+                transform: translateX(0) translateY(0);
+            }
+
+            10% {
+                transform: translateX(-5px) translateY(-2px);
+            }
+
+            20% {
+                transform: translateX(5px) translateY(2px);
+            }
+
+            30% {
+                transform: translateX(-3px) translateY(-1px);
+            }
+
+            40% {
+                transform: translateX(3px) translateY(1px);
+            }
+
+            50% {
+                transform: translateX(-2px) translateY(-1px);
+            }
+
+            60% {
+                transform: translateX(2px) translateY(1px);
+            }
         }
 
         @keyframes hpFlash {
-            0%, 100% { background-color: initial; }
-            50% { background-color: #ef4444; }
+
+            0%,
+            100% {
+                background-color: initial;
+            }
+
+            50% {
+                background-color: #ef4444;
+            }
         }
 
         @keyframes knockout {
-            0% { 
+            0% {
                 transform: scale(1) rotate(0deg);
                 opacity: 1;
             }
-            50% { 
+
+            50% {
                 transform: scale(1.1) rotate(5deg);
                 opacity: 0.7;
             }
-            100% { 
+
+            100% {
                 transform: scale(0.8) rotate(15deg);
                 opacity: 0;
             }
@@ -868,10 +1376,12 @@
                 transform: scale(1);
                 opacity: 1;
             }
+
             50% {
                 transform: scale(0.8);
                 opacity: 0.8;
             }
+
             100% {
                 transform: scale(0.6);
                 opacity: 0.6;
@@ -879,8 +1389,13 @@
         }
 
         @keyframes fadeIn {
-            0% { opacity: 0; }
-            100% { opacity: 1; }
+            0% {
+                opacity: 0;
+            }
+
+            100% {
+                opacity: 1;
+            }
         }
 
         @keyframes slideInBottom {
@@ -888,6 +1403,7 @@
                 transform: translateY(100px);
                 opacity: 0;
             }
+
             100% {
                 transform: translateY(0);
                 opacity: 1;
@@ -895,169 +1411,249 @@
         }
 
         @keyframes evolutionGlow {
-            0%, 100% { opacity: 0; }
-            50% { opacity: 1; }
+
+            0%,
+            100% {
+                opacity: 0;
+            }
+
+            50% {
+                opacity: 1;
+            }
         }
 
         @keyframes attackBlast {
-            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-            50% { transform: translate(-50%, -50%) scale(1.5); opacity: 1; }
-            100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+            0% {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 0;
+            }
+
+            50% {
+                transform: translate(-50%, -50%) scale(1.5);
+                opacity: 1;
+            }
+
+            100% {
+                transform: translate(-50%, -50%) scale(2);
+                opacity: 0;
+            }
         }
 
         @keyframes revealFlash {
-            0% { opacity: 0; transform: scale(0.8); }
-            30% { opacity: 1; transform: scale(1.2); }
-            60% { opacity: 0.8; transform: scale(1.1); }
-            100% { opacity: 0; transform: scale(1); }
+            0% {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+
+            30% {
+                opacity: 1;
+                transform: scale(1.2);
+            }
+
+            60% {
+                opacity: 0.8;
+                transform: scale(1.1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: scale(1);
+            }
         }
 
         /* ⚡ タイプ別攻撃アニメーション（復元 + 拡張） */
         @keyframes typeFire {
-            0%, 100% { 
-                box-shadow: 0 0 0 rgba(255, 107, 53, 0); 
-                filter: hue-rotate(0deg) saturate(1); 
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(255, 107, 53, 0);
+                filter: hue-rotate(0deg) saturate(1);
             }
-            50% { 
-                box-shadow: 0 0 30px rgba(255, 107, 53, 0.8), 0 0 60px rgba(255, 107, 53, 0.4); 
-                filter: hue-rotate(10deg) saturate(1.3); 
+
+            50% {
+                box-shadow: 0 0 30px rgba(255, 107, 53, 0.8), 0 0 60px rgba(255, 107, 53, 0.4);
+                filter: hue-rotate(10deg) saturate(1.3);
             }
         }
 
         @keyframes typeWater {
-            0%, 100% { 
-                box-shadow: 0 0 0 rgba(79, 195, 247, 0); 
-                filter: hue-rotate(0deg) saturate(1); 
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(79, 195, 247, 0);
+                filter: hue-rotate(0deg) saturate(1);
             }
-            50% { 
-                box-shadow: 0 0 30px rgba(79, 195, 247, 0.8), 0 0 60px rgba(79, 195, 247, 0.4); 
-                filter: hue-rotate(-10deg) saturate(1.2); 
+
+            50% {
+                box-shadow: 0 0 30px rgba(79, 195, 247, 0.8), 0 0 60px rgba(79, 195, 247, 0.4);
+                filter: hue-rotate(-10deg) saturate(1.2);
             }
         }
 
         @keyframes typeGrass {
-            0%, 100% { 
-                box-shadow: 0 0 0 rgba(102, 187, 106, 0); 
-                filter: hue-rotate(0deg) saturate(1); 
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(102, 187, 106, 0);
+                filter: hue-rotate(0deg) saturate(1);
             }
-            50% { 
-                box-shadow: 0 0 30px rgba(102, 187, 106, 0.8), 0 0 60px rgba(102, 187, 106, 0.4); 
-                filter: hue-rotate(15deg) saturate(1.4); 
+
+            50% {
+                box-shadow: 0 0 30px rgba(102, 187, 106, 0.8), 0 0 60px rgba(102, 187, 106, 0.4);
+                filter: hue-rotate(15deg) saturate(1.4);
             }
         }
 
         @keyframes typeLightning {
-            0%, 100% { 
-                box-shadow: 0 0 0 rgba(255, 235, 59, 0); 
-                filter: brightness(1) contrast(1); 
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(255, 235, 59, 0);
+                filter: brightness(1) contrast(1);
             }
-            25% { 
-                box-shadow: 0 0 35px rgba(255, 235, 59, 0.9), 0 0 70px rgba(255, 235, 59, 0.5); 
-                filter: brightness(1.4) contrast(1.2); 
+
+            25% {
+                box-shadow: 0 0 35px rgba(255, 235, 59, 0.9), 0 0 70px rgba(255, 235, 59, 0.5);
+                filter: brightness(1.4) contrast(1.2);
             }
-            75% { 
-                box-shadow: 0 0 20px rgba(255, 235, 59, 0.6), 0 0 40px rgba(255, 235, 59, 0.3); 
-                filter: brightness(0.8) contrast(1.1); 
+
+            75% {
+                box-shadow: 0 0 20px rgba(255, 235, 59, 0.6), 0 0 40px rgba(255, 235, 59, 0.3);
+                filter: brightness(0.8) contrast(1.1);
             }
         }
 
         @keyframes typePsychic {
-            0%, 100% { 
-                box-shadow: 0 0 0 rgba(156, 39, 176, 0); 
-                filter: hue-rotate(0deg) saturate(1) sepia(0); 
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(156, 39, 176, 0);
+                filter: hue-rotate(0deg) saturate(1) sepia(0);
             }
-            50% { 
-                box-shadow: 0 0 35px rgba(156, 39, 176, 0.8), 0 0 70px rgba(156, 39, 176, 0.4); 
-                filter: hue-rotate(20deg) saturate(1.5) sepia(0.2); 
+
+            50% {
+                box-shadow: 0 0 35px rgba(156, 39, 176, 0.8), 0 0 70px rgba(156, 39, 176, 0.4);
+                filter: hue-rotate(20deg) saturate(1.5) sepia(0.2);
             }
         }
 
         @keyframes typeFighting {
-            0%, 100% { 
-                box-shadow: 0 0 0 rgba(255, 136, 68, 0); 
-                filter: contrast(1) saturate(1); 
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(255, 136, 68, 0);
+                filter: contrast(1) saturate(1);
             }
-            30% { 
-                box-shadow: 0 0 25px rgba(255, 136, 68, 0.9), inset 0 0 15px rgba(255, 136, 68, 0.3); 
-                filter: contrast(1.3) saturate(1.4); 
+
+            30% {
+                box-shadow: 0 0 25px rgba(255, 136, 68, 0.9), inset 0 0 15px rgba(255, 136, 68, 0.3);
+                filter: contrast(1.3) saturate(1.4);
             }
-            70% { 
-                box-shadow: 0 0 40px rgba(255, 136, 68, 0.6), inset 0 0 25px rgba(255, 136, 68, 0.2); 
-                filter: contrast(1.1) saturate(1.2); 
+
+            70% {
+                box-shadow: 0 0 40px rgba(255, 136, 68, 0.6), inset 0 0 25px rgba(255, 136, 68, 0.2);
+                filter: contrast(1.1) saturate(1.2);
             }
         }
 
         @keyframes typeDarkness {
-            0%, 100% { 
-                box-shadow: 0 0 0 rgba(66, 66, 66, 0); 
-                filter: brightness(1) invert(0); 
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(66, 66, 66, 0);
+                filter: brightness(1) invert(0);
             }
-            50% { 
-                box-shadow: 0 0 40px rgba(66, 66, 66, 0.9), 0 0 80px rgba(66, 66, 66, 0.5), inset 0 0 20px rgba(0, 0, 0, 0.3); 
-                filter: brightness(0.7) invert(0.1); 
+
+            50% {
+                box-shadow: 0 0 40px rgba(66, 66, 66, 0.9), 0 0 80px rgba(66, 66, 66, 0.5), inset 0 0 20px rgba(0, 0, 0, 0.3);
+                filter: brightness(0.7) invert(0.1);
             }
         }
 
         @keyframes typeMetal {
-            0%, 100% { 
-                box-shadow: 0 0 0 rgba(96, 125, 139, 0); 
-                filter: brightness(1) contrast(1) blur(0px); 
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(96, 125, 139, 0);
+                filter: brightness(1) contrast(1) blur(0px);
             }
-            50% { 
-                box-shadow: 0 0 30px rgba(96, 125, 139, 0.8), 0 0 60px rgba(158, 158, 158, 0.4), inset 0 0 15px rgba(255, 255, 255, 0.2); 
-                filter: brightness(1.2) contrast(1.3) blur(0.5px); 
+
+            50% {
+                box-shadow: 0 0 30px rgba(96, 125, 139, 0.8), 0 0 60px rgba(158, 158, 158, 0.4), inset 0 0 15px rgba(255, 255, 255, 0.2);
+                filter: brightness(1.2) contrast(1.3) blur(0.5px);
             }
         }
 
         @keyframes typeFairy {
-            0%, 100% { 
-                box-shadow: 0 0 0 rgba(255, 170, 255, 0); 
-                filter: hue-rotate(0deg) saturate(1) brightness(1); 
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(255, 170, 255, 0);
+                filter: hue-rotate(0deg) saturate(1) brightness(1);
             }
-            33% { 
-                box-shadow: 0 0 25px rgba(255, 170, 255, 0.7), 0 0 50px rgba(255, 192, 203, 0.5); 
-                filter: hue-rotate(10deg) saturate(1.3) brightness(1.1); 
+
+            33% {
+                box-shadow: 0 0 25px rgba(255, 170, 255, 0.7), 0 0 50px rgba(255, 192, 203, 0.5);
+                filter: hue-rotate(10deg) saturate(1.3) brightness(1.1);
             }
-            66% { 
-                box-shadow: 0 0 35px rgba(255, 170, 255, 0.9), 0 0 70px rgba(255, 182, 193, 0.6); 
-                filter: hue-rotate(-5deg) saturate(1.4) brightness(1.2); 
+
+            66% {
+                box-shadow: 0 0 35px rgba(255, 170, 255, 0.9), 0 0 70px rgba(255, 182, 193, 0.6);
+                filter: hue-rotate(-5deg) saturate(1.4) brightness(1.2);
             }
         }
 
         @keyframes typeDragon {
-            0%, 100% { 
-                box-shadow: 0 0 0 rgba(68, 68, 255, 0); 
-                filter: hue-rotate(0deg) saturate(1) contrast(1); 
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(68, 68, 255, 0);
+                filter: hue-rotate(0deg) saturate(1) contrast(1);
             }
-            25% { 
-                box-shadow: 0 0 30px rgba(68, 68, 255, 0.7), 0 0 60px rgba(138, 43, 226, 0.4); 
-                filter: hue-rotate(30deg) saturate(1.4) contrast(1.2); 
+
+            25% {
+                box-shadow: 0 0 30px rgba(68, 68, 255, 0.7), 0 0 60px rgba(138, 43, 226, 0.4);
+                filter: hue-rotate(30deg) saturate(1.4) contrast(1.2);
             }
-            75% { 
-                box-shadow: 0 0 40px rgba(68, 68, 255, 0.9), 0 0 80px rgba(255, 0, 255, 0.5); 
-                filter: hue-rotate(-20deg) saturate(1.6) contrast(1.3); 
+
+            75% {
+                box-shadow: 0 0 40px rgba(68, 68, 255, 0.9), 0 0 80px rgba(255, 0, 255, 0.5);
+                filter: hue-rotate(-20deg) saturate(1.6) contrast(1.3);
             }
         }
 
         @keyframes typeColorless {
-            0%, 100% { 
-                box-shadow: 0 0 0 rgba(158, 158, 158, 0); 
-                filter: brightness(1) saturate(1); 
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(158, 158, 158, 0);
+                filter: brightness(1) saturate(1);
             }
-            50% { 
-                box-shadow: 0 0 25px rgba(158, 158, 158, 0.6), 0 0 50px rgba(255, 255, 255, 0.4); 
-                filter: brightness(1.3) saturate(0.8); 
+
+            50% {
+                box-shadow: 0 0 25px rgba(158, 158, 158, 0.6), 0 0 50px rgba(255, 255, 255, 0.4);
+                filter: brightness(1.3) saturate(0.8);
             }
         }
 
         @keyframes deckLift {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(-5px); } /* Lift up slightly */
-            100% { transform: translateY(0px); }
+            0% {
+                transform: translateY(0px);
+            }
+
+            50% {
+                transform: translateY(-5px);
+            }
+
+            /* Lift up slightly */
+            100% {
+                transform: translateY(0px);
+            }
         }
 
         .deck-card-element.is-drawing {
-            animation: deckLift var(--anim-fast) ease-out forwards; /* Apply the lift animation */
+            animation: deckLift var(--anim-fast) ease-out forwards;
+            /* Apply the lift animation */
         }
 
         /* レイヤー5: アニメーションクラス */
@@ -1102,59 +1698,69 @@
         }
 
         /* ⚡ タイプ別攻撃アニメーションクラス（画面内制限付き） */
-        .anim-type-fire { 
-            animation: typeFire var(--anim-combat) var(--anim-ease-default); 
-            contain: layout style; 
+        .anim-type-fire {
+            animation: typeFire var(--anim-combat) var(--anim-ease-default);
+            contain: layout style;
             transform-origin: center;
         }
-        .anim-type-water { 
-            animation: typeWater var(--anim-combat) var(--anim-ease-default); 
-            contain: layout style; 
+
+        .anim-type-water {
+            animation: typeWater var(--anim-combat) var(--anim-ease-default);
+            contain: layout style;
             transform-origin: center;
         }
-        .anim-type-grass { 
-            animation: typeGrass var(--anim-combat) var(--anim-ease-default); 
-            contain: layout style; 
+
+        .anim-type-grass {
+            animation: typeGrass var(--anim-combat) var(--anim-ease-default);
+            contain: layout style;
             transform-origin: center;
         }
-        .anim-type-lightning { 
-            animation: typeLightning var(--anim-combat) var(--anim-ease-default); 
-            contain: layout style; 
+
+        .anim-type-lightning {
+            animation: typeLightning var(--anim-combat) var(--anim-ease-default);
+            contain: layout style;
             transform-origin: center;
         }
-        .anim-type-psychic { 
-            animation: typePsychic var(--anim-combat) var(--anim-ease-default); 
-            contain: layout style; 
+
+        .anim-type-psychic {
+            animation: typePsychic var(--anim-combat) var(--anim-ease-default);
+            contain: layout style;
             transform-origin: center;
         }
-        .anim-type-fighting { 
-            animation: typeFighting var(--anim-combat) var(--anim-ease-default); 
-            contain: layout style; 
+
+        .anim-type-fighting {
+            animation: typeFighting var(--anim-combat) var(--anim-ease-default);
+            contain: layout style;
             transform-origin: center;
         }
-        .anim-type-darkness { 
-            animation: typeDarkness var(--anim-combat) var(--anim-ease-default); 
-            contain: layout style; 
+
+        .anim-type-darkness {
+            animation: typeDarkness var(--anim-combat) var(--anim-ease-default);
+            contain: layout style;
             transform-origin: center;
         }
-        .anim-type-metal { 
-            animation: typeMetal var(--anim-combat) var(--anim-ease-default); 
-            contain: layout style; 
+
+        .anim-type-metal {
+            animation: typeMetal var(--anim-combat) var(--anim-ease-default);
+            contain: layout style;
             transform-origin: center;
         }
-        .anim-type-fairy { 
-            animation: typeFairy var(--anim-combat) var(--anim-ease-default); 
-            contain: layout style; 
+
+        .anim-type-fairy {
+            animation: typeFairy var(--anim-combat) var(--anim-ease-default);
+            contain: layout style;
             transform-origin: center;
         }
-        .anim-type-dragon { 
-            animation: typeDragon var(--anim-combat) var(--anim-ease-default); 
-            contain: layout style; 
+
+        .anim-type-dragon {
+            animation: typeDragon var(--anim-combat) var(--anim-ease-default);
+            contain: layout style;
             transform-origin: center;
         }
-        .anim-type-colorless { 
-            animation: typeColorless var(--anim-combat) var(--anim-ease-default); 
-            contain: layout style; 
+
+        .anim-type-colorless {
+            animation: typeColorless var(--anim-combat) var(--anim-ease-default);
+            contain: layout style;
             transform-origin: center;
         }
 
@@ -1191,37 +1797,124 @@
         }
 
 
-        /* レイヤー6: ハイライト効果 */
+        /* ==========================================
+           レイヤー6: ハイライト効果 - UI/UX最適化
+           ========================================== */
+
+        /* 選択状態 - 明確な視覚フィードバック */
         .card-selected {
-            box-shadow: 0 0 20px #4dd0fd80;
-            border: 2px solid #4dd0fd;
-            transform: var(--gpu-layer) translateY(-5px) scale(1.05);
+            box-shadow:
+                0 0 25px rgba(77, 208, 253, 0.6),
+                0 0 0 3px var(--color-secondary),
+                inset 0 0 15px rgba(77, 208, 253, 0.1);
+            border: 2px solid var(--color-secondary);
+            transform: translateY(-8px) scale(1.06);
             z-index: var(--z-selected);
-            will-change: var(--performance-will-change);
+            animation: selectedPulse 2s ease-in-out infinite;
         }
 
+        @keyframes selectedPulse {
+            0%, 100% {
+                box-shadow:
+                    0 0 25px rgba(77, 208, 253, 0.6),
+                    0 0 0 3px var(--color-secondary);
+            }
+            50% {
+                box-shadow:
+                    0 0 35px rgba(77, 208, 253, 0.8),
+                    0 0 0 4px var(--color-secondary-hover);
+            }
+        }
 
-
+        /* 配置可能スロットのハイライト */
         .slot-highlight {
-            box-shadow: 0 0 15px #22c55e80;
-            border: 2px dashed #22c55e;
-            background-color: rgba(34, 197, 94, 0.1);
+            box-shadow:
+                0 0 20px rgba(34, 197, 94, 0.5),
+                inset 0 0 10px rgba(34, 197, 94, 0.1);
+            border: 2px dashed var(--color-success);
+            background-color: rgba(34, 197, 94, 0.08);
             z-index: var(--z-highlight);
+            animation: highlightPulse 1.5s ease-in-out infinite;
         }
 
+        @keyframes highlightPulse {
+            0%, 100% {
+                box-shadow: 0 0 20px rgba(34, 197, 94, 0.5);
+                border-color: var(--color-success);
+            }
+            50% {
+                box-shadow: 0 0 30px rgba(34, 197, 94, 0.7);
+                border-color: #4ADE80;
+            }
+        }
+
+        /* エネルギー付与対象のハイライト */
         .energy-target-highlight {
-            box-shadow: 0 0 15px #f59e0b80;
-            border: 2px dashed #f59e0b;
-            background-color: rgba(245, 158, 11, 0.1);
+            box-shadow:
+                0 0 20px rgba(245, 158, 11, 0.5),
+                inset 0 0 10px rgba(245, 158, 11, 0.1);
+            border: 2px dashed var(--color-warning);
+            background-color: rgba(245, 158, 11, 0.08);
             z-index: var(--z-highlight);
+            animation: energyPulse 1.2s ease-in-out infinite;
         }
 
-        .error-message {
-            animation: damageShake var(--anim-combat) ease-out;
-            color: #ef4444;
-            background-color: rgba(239, 68, 68, 0.1);
+        @keyframes energyPulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(245, 158, 11, 0.5); }
+            50% { box-shadow: 0 0 30px rgba(245, 158, 11, 0.8); }
         }
-        
+
+        /* 攻撃対象ハイライト */
+        .attack-target-highlight {
+            box-shadow:
+                0 0 25px rgba(239, 68, 68, 0.6),
+                inset 0 0 15px rgba(239, 68, 68, 0.1);
+            border: 2px solid var(--color-danger);
+            background-color: rgba(239, 68, 68, 0.08);
+            z-index: var(--z-highlight);
+            animation: attackTargetPulse 0.8s ease-in-out infinite;
+        }
+
+        @keyframes attackTargetPulse {
+            0%, 100% {
+                box-shadow: 0 0 25px rgba(239, 68, 68, 0.6);
+                transform: scale(1);
+            }
+            50% {
+                box-shadow: 0 0 40px rgba(239, 68, 68, 0.9);
+                transform: scale(1.02);
+            }
+        }
+
+        /* エラーメッセージ - 注目を引く表示 */
+        .error-message {
+            animation: errorShake 0.5s ease-out;
+            color: var(--color-danger);
+            background-color: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-sm) var(--spacing-md);
+        }
+
+        @keyframes errorShake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-8px); }
+            40% { transform: translateX(8px); }
+            60% { transform: translateX(-6px); }
+            80% { transform: translateX(6px); }
+        }
+
+        /* 成功フィードバック */
+        .success-feedback {
+            animation: successPop 0.4s var(--transition-spring);
+        }
+
+        @keyframes successPop {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
         .card-slot::before {
             content: attr(data-zone);
             position: absolute;
@@ -1236,34 +1929,49 @@
             pointer-events: none;
             z-index: var(--z-board-bg);
         }
-        
+
         /* ユーティリティクラス */
-        .is-hidden { opacity: 0; pointer-events: none; }
-        .hidden { display: none !important; }
+        .is-hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .hidden {
+            display: none !important;
+        }
 
         .card-placeholder {
-            background-color: rgba(255, 255, 255, 0.05);
-            border: 1px dashed rgba(255, 255, 255, 0.15);
-            border-radius: clamp(4px, 0.8vw, 8px);
+            background-color: rgba(255, 255, 255, 0.04);
+            border: 1px dashed rgba(255, 255, 255, 0.12);
+            border-radius: var(--radius-md);
             display: flex;
             align-items: center;
             justify-content: center;
-            color: rgba(255, 255, 255, 0.4);
-            font-size: clamp(0.5rem, 1.5vw, 0.7rem);
+            color: rgba(255, 255, 255, 0.35);
+            font-size: clamp(0.55rem, 1.2vw, 0.7rem);
             text-align: center;
-            padding: clamp(2px, 0.5vw, 4px);
+            padding: var(--spacing-xs);
             box-sizing: border-box;
             pointer-events: auto;
             position: relative;
             z-index: var(--z-placeholder);
             transform-origin: center center;
             white-space: nowrap;
-            line-height: 1.1;
+            line-height: 1.2;
             min-height: 1.5em;
-            font-weight: 300;
+            font-weight: 400;
             width: 100%;
             height: 100%;
             object-fit: contain;
+            /* ホバー時のヒント表示 */
+            transition:
+                background-color var(--transition-fast),
+                border-color var(--transition-fast);
+        }
+
+        .card-placeholder:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.25);
         }
 
         /* 手札プレースホルダーのスケール時の特別対応 */
@@ -1283,45 +1991,60 @@
 
         /* ゲームボード装飾 */
         #game-board {
-            border: 1px solid rgba(255, 255, 255, 0.1); /* Lighter border for contrast */
-            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4); /* More pronounced shadow */
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            /* Lighter border for contrast */
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+            /* More pronounced shadow */
         }
 
         #game-status-panel {
             color: #fff;
-            padding: clamp(0.5rem, 2vw, 1rem);
-            font-size: clamp(0.8rem, 1.5vw, 1rem);
-            width: clamp(280px, 30vw, 360px);
-            min-height: 280px; /* 最小高さ保証 */
-            max-height: 80vh; /* 画面高さの80%まで */
-            height: auto; /* 内容に応じて動的に伸びる */
+            padding: clamp(0.4rem, 1.5vw, 0.8rem);
+            font-size: clamp(0.75rem, 1.3vw, 0.95rem);
+            /* サイズ縮小でゲームボードへの視線を確保 */
+            width: clamp(220px, 22vw, 300px);
+            min-height: auto;
+            max-height: 60vh;
+            height: auto;
             position: fixed;
-            top: 20px; /* 右上に配置 */
-            right: 20px; /* 右上に配置 */
-            z-index: var(--z-panels); /* 他UIと同じ最前面レベル */
-            overflow-y: auto; /* スクロール可能 */
+            /* 右上配置だが、CPU手札と干渉しない位置 */
+            top: clamp(12px, 2vh, 20px);
+            right: clamp(12px, 2vw, 20px);
+            z-index: var(--z-panels);
+            overflow-y: auto;
+            /* パネルの透明度を上げてゲームの邪魔にならないように */
+            opacity: 0.95;
+            transition: opacity 0.2s ease;
+        }
+
+        #game-status-panel:hover {
+            opacity: 1;
         }
 
         .status-panel-content {
             height: 100%;
             display: flex;
             flex-direction: column;
-            background: linear-gradient(135deg, 
-                rgba(220, 38, 38, 0.9) 0%,    /* Pokemon Red */
-                rgba(239, 68, 68, 0.95) 30%,   
-                rgba(59, 130, 246, 0.9) 70%,   /* Pokemon Blue */
-                rgba(37, 99, 235, 0.95) 100%);
-            border: 3px solid #FCD34D; /* Pokemon Yellow border */
+            background: linear-gradient(135deg,
+                    rgba(220, 38, 38, 0.9) 0%,
+                    /* Pokemon Red */
+                    rgba(239, 68, 68, 0.95) 30%,
+                    rgba(59, 130, 246, 0.9) 70%,
+                    /* Pokemon Blue */
+                    rgba(37, 99, 235, 0.95) 100%);
+            border: 3px solid #FCD34D;
+            /* Pokemon Yellow border */
             border-radius: 20px;
-            box-shadow: 
+            box-shadow:
                 0 25px 50px rgba(0, 0, 0, 0.5),
-                0 0 30px rgba(252, 211, 77, 0.4), /* Yellow glow */
+                0 0 30px rgba(252, 211, 77, 0.4),
+                /* Yellow glow */
                 inset 0 2px 4px rgba(255, 255, 255, 0.2),
                 inset 0 -2px 4px rgba(0, 0, 0, 0.2);
             backdrop-filter: blur(15px);
             position: relative;
         }
-        
+
         /* Pokeball-inspired decoration on panel */
         .status-panel-content::before {
             content: '';
@@ -1330,85 +2053,101 @@
             right: 15px;
             width: 20px;
             height: 20px;
-            background: radial-gradient(circle, 
-                #ffffff 0%, #ffffff 30%, 
-                #000000 30%, #000000 50%, 
-                #dc2626 50%, #dc2626 100%);
+            background: radial-gradient(circle,
+                    #ffffff 0%, #ffffff 30%,
+                    #000000 30%, #000000 50%,
+                    #dc2626 50%, #dc2626 100%);
             border-radius: 50%;
             border: 2px solid #FCD34D;
             z-index: var(--z-board-bg);
         }
 
         .status-panel-header {
-            padding: 16px 20px 12px 20px;
-            border-bottom: 2px solid rgba(252, 211, 77, 0.6); /* Yellow border */
-            background: linear-gradient(135deg, 
-                rgba(255, 255, 255, 0.15) 0%,
-                rgba(252, 211, 77, 0.1) 50%,
-                rgba(255, 255, 255, 0.1) 100%);
-            border-radius: 20px 20px 0 0;
+            padding: clamp(10px, 1.5vh, 14px) clamp(12px, 2vw, 18px) clamp(8px, 1vh, 12px);
+            border-bottom: 2px solid rgba(252, 211, 77, 0.5);
+            background: linear-gradient(135deg,
+                    rgba(255, 255, 255, 0.12) 0%,
+                    rgba(252, 211, 77, 0.08) 50%,
+                    rgba(255, 255, 255, 0.08) 100%);
+            border-radius: 18px 18px 0 0;
             position: relative;
         }
 
         .status-panel-body {
             flex: 1;
-            padding: 16px 20px;
-            overflow-y: hidden; /* スクロールを無効化 */
+            padding: clamp(10px, 1.5vh, 14px) clamp(12px, 2vw, 18px);
+            overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 12px; /* ギャップを少し狭めてスペースを節約 */
+            gap: clamp(8px, 1.2vh, 12px);
         }
 
         .status-info-section {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 12px 16px;
-            border: 2px solid rgba(252, 211, 77, 0.3); /* Yellow border */
-            box-shadow: 
-                0 4px 8px rgba(0, 0, 0, 0.2),
-                inset 0 1px 2px rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(5px);
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: clamp(8px, 1.2vh, 12px) clamp(10px, 1.5vw, 14px);
+            border: 1px solid rgba(252, 211, 77, 0.25);
+            box-shadow:
+                0 3px 6px rgba(0, 0, 0, 0.15),
+                inset 0 1px 2px rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(4px);
         }
 
         .status-info-title {
-            font-size: 0.75rem;
-            font-weight: 600;
-            color: #FFFFFF; /* より明るい白に変更 */
+            font-size: var(--font-size-xs);
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.9);
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-bottom: 4px;
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8); /* テキストシャドウを追加 */
-        }
-
-        .status-info-value {
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: #FFFFFF;
+            letter-spacing: 0.08em;
+            margin-bottom: var(--spacing-xs);
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
         }
 
+        .status-info-value {
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            color: #FFFFFF;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+            /* 数値は等幅フォントで読みやすく */
+            font-variant-numeric: tabular-nums;
+        }
+
         .game-message-area {
-            background: rgba(0, 0, 0, 0.4); /* より暗い背景でコントラスト向上 */
-            border-radius: 8px;
-            padding: 12px 16px;
-            border: 2px solid rgba(252, 211, 77, 0.4); /* 黄色の境界線 */
-            min-height: 60px;
+            background: rgba(0, 0, 0, 0.45);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-md);
+            border: 1px solid rgba(252, 211, 77, 0.35);
+            min-height: 50px;
             display: flex;
             align-items: center;
             justify-content: center;
             text-align: center;
+            /* メッセージ更新時のアニメーション */
+            transition: background-color var(--transition-normal);
+        }
+
+        .game-message-area:has(.game-message-text:not(:empty)) {
+            background: rgba(0, 0, 0, 0.5);
         }
 
         .game-message-text {
-            font-size: 0.875rem;
-            line-height: 1.4;
+            font-size: var(--font-size-sm);
+            line-height: 1.5;
             color: #FFFFFF;
             text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9);
             font-weight: 500;
+            /* メッセージ変更時のフェードイン */
+            animation: messageAppear var(--transition-normal) ease-out;
+        }
+
+        @keyframes messageAppear {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         /* Hand Dock (Mac Dock-like magnification) */
         #player-hand.hand-dock {
+            -webkit-user-select: none;
             user-select: none;
             contain: layout paint;
             overflow: visible;
@@ -1416,182 +2155,433 @@
             z-index: var(--z-hand);
             transform: none;
             will-change: auto;
-            /* ウィンドウ下部に柔軟配置 */
-            position: fixed;
-            bottom: clamp(20px, 3vh, 50px);
-            left: 50%;
-            transform: translateX(-50%);
-            /* Mac Dock 1.6x拡大 + 浮上対応の高さ設定 */
+            /* グリッドレイアウト内で相対配置 */
+            position: relative;
+            width: 100%;
+            max-width: 90vw;
+            margin: 0 auto;
+            /* Mac Dock効果 - 150%拡大対応の高さ設定 */
             max-height: 250px !important;
-            height: clamp(180px, 30vh, 250px) !important;
-            min-height: 220px !important;
+            height: clamp(180px, 25vh, 250px) !important;
+            min-height: 180px !important;
+            /* カード配置 - 下揃えで上方向に拡大 */
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            gap: var(--hand-gap);
         }
-        
-        /* 手札スロット基本スタイル */
+
+        /* 手札スロット基本スタイル - UI/UX最適化 */
         .hand-slot {
-            transition: transform 0.2s ease, box-shadow 0.2s ease, border 0.2s ease;
-            border-radius: 8px;
+            /* スプリングアニメーション風のトランジション */
+            transition:
+                transform var(--transition-spring),
+                box-shadow var(--transition-normal),
+                border var(--transition-fast),
+                filter var(--transition-normal);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            /* タッチ操作最適化 */
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            /* GPUアクセラレーション */
+            will-change: transform;
         }
-        
-        /* アクティブな手札スロット（黄色いハイライトシステムを使用） */
+
+        /* アクティブな手札スロット - 明確な選択状態 */
         .hand-slot.active {
-            transform: translateY(-8px) scale(1.05);
-            box-shadow: 0 8px 25px rgba(255, 215, 0, 0.6);
-            border: 2px solid #ffd700;
+            transform: translateY(-12px) scale(1.08);
+            box-shadow:
+                0 12px 30px rgba(255, 215, 0, 0.5),
+                0 0 0 3px var(--color-primary),
+                inset 0 0 20px rgba(255, 215, 0, 0.1);
+            border: 2px solid var(--color-primary);
+            filter: brightness(1.1);
+            z-index: calc(var(--z-hand) + 20);
         }
-        
-        /* ホバー時の手札スロット */
+
+        /* ホバー時の手札スロット - 微細なフィードバック */
         .hand-slot:hover:not(.active) {
-            transform: translateY(-2px) scale(1.02);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            transform: translateY(-6px) scale(1.04);
+            box-shadow:
+                0 8px 20px rgba(0, 0, 0, 0.35),
+                0 0 15px rgba(255, 255, 255, 0.1);
+            filter: brightness(1.05);
         }
+
+        /* 押下時のフィードバック */
+        .hand-slot:active:not(.active) {
+            transform: translateY(-2px) scale(1.02);
+            transition: transform 50ms ease-out;
+        }
+
+        /* フォーカス状態 - キーボードナビゲーション */
+        .hand-slot:focus-visible {
+            outline: var(--focus-ring-width) solid var(--focus-ring-color);
+            outline-offset: var(--focus-ring-offset);
+        }
+
         #player-hand.hand-dock .hand-slot.hand-card {
             transition: transform 140ms ease, filter 140ms ease, z-index 140ms ease !important;
             will-change: transform !important;
             transform-origin: bottom center !important;
-            filter: drop-shadow(0 8px 15px rgba(0,0,0,0.4));
+            filter: drop-shadow(0 8px 15px rgba(0, 0, 0, 0.4));
             position: relative;
             z-index: var(--z-highlight);
         }
 
 
         button {
-            /* background-color: rgba(255, 255, 255, 0.1); */ /* Base color from Tailwind classes */
-            backdrop-filter: blur(5px); /* Subtle blur for buttons */
-            border: 1px solid rgba(255, 255, 255, 0.2); /* Light border */
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); /* Soft shadow */
-            transition: all 0.2s ease-in-out; /* Smooth transitions */
+            /* background-color: rgba(255, 255, 255, 0.1); */
+            /* Base color from Tailwind classes */
+            backdrop-filter: blur(5px);
+            /* Subtle blur for buttons */
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            /* Light border */
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            /* Soft shadow */
+            transition: all 0.2s ease-in-out;
+            /* Smooth transitions */
         }
 
         button:hover {
-            /* background-color: rgba(255, 255, 255, 0.2); */ /* Slightly more opaque on hover */
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2); /* Enhanced shadow on hover */
+            /* background-color: rgba(255, 255, 255, 0.2); */
+            /* Slightly more opaque on hover */
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            /* Enhanced shadow on hover */
         }
 
-        /* UI layers */
-        .ui-overlay {
-            background: rgba(10, 10, 10, 0.6); /* Darker, more opaque */
+        #action-modal {
+            z-index: var(--z-modals);
         }
-        
-        #action-modal { z-index: var(--z-modals); }
-        
+
         /* Pokemon-style Floating Action HUD - 統合済み (#floating-action-hudで統合管理済み) */
-        
+
+        /* ==========================================
+           戦闘アニメーション CSS
+           combat.js が使用するキーフレーム定義
+           ========================================== */
+
+        /* 攻撃前進アニメーション */
+        @keyframes anim-attack-forward {
+            0% { transform: translateX(0) scale(1); }
+            30% { transform: translateX(20px) scale(1.05); }
+            60% { transform: translateX(40px) scale(1.1); }
+            100% { transform: translateX(0) scale(1); }
+        }
+
+        .anim-attack-forward {
+            animation: anim-attack-forward 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        /* ダメージシェイクアニメーション */
+        @keyframes anim-damage-shake {
+            0%, 100% { transform: translateX(0) rotate(0deg); }
+            10% { transform: translateX(-8px) rotate(-2deg); }
+            20% { transform: translateX(8px) rotate(2deg); }
+            30% { transform: translateX(-6px) rotate(-1.5deg); }
+            40% { transform: translateX(6px) rotate(1.5deg); }
+            50% { transform: translateX(-4px) rotate(-1deg); }
+            60% { transform: translateX(4px) rotate(1deg); }
+            70% { transform: translateX(-2px) rotate(-0.5deg); }
+            80% { transform: translateX(2px) rotate(0.5deg); }
+        }
+
+        .anim-damage-shake {
+            animation: anim-damage-shake 0.5s ease-out;
+        }
+
+        /* 気絶（ノックアウト）アニメーション */
+        @keyframes anim-knockout {
+            0% { transform: scale(1) rotate(0deg); opacity: 1; }
+            30% { transform: scale(1.1) rotate(5deg); opacity: 1; }
+            60% { transform: scale(0.8) rotate(-10deg); opacity: 0.7; }
+            100% { transform: scale(0) rotate(-180deg); opacity: 0; }
+        }
+
+        .anim-knockout {
+            animation: anim-knockout 0.8s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards;
+        }
+
+        /* 画面シェイクアニメーション（ダメージ時） - フラット版 */
+        @keyframes anim-screen-shake {
+            0%, 100% { transform: translateX(0) translateY(0); }
+            10% { transform: translateX(calc(-5px * var(--shake-intensity, 1))) translateY(calc(2px * var(--shake-intensity, 1))); }
+            20% { transform: translateX(calc(5px * var(--shake-intensity, 1))) translateY(calc(-2px * var(--shake-intensity, 1))); }
+            30% { transform: translateX(calc(-4px * var(--shake-intensity, 1))) translateY(calc(1px * var(--shake-intensity, 1))); }
+            40% { transform: translateX(calc(4px * var(--shake-intensity, 1))) translateY(calc(-1px * var(--shake-intensity, 1))); }
+            50% { transform: translateX(calc(-2px * var(--shake-intensity, 1))) translateY(0); }
+            60% { transform: translateX(calc(2px * var(--shake-intensity, 1))) translateY(0); }
+        }
+
+        .anim-screen-shake {
+            animation: anim-screen-shake 0.4s ease-out;
+        }
+
+        /* 画面フラッシュ（気絶時） */
+        @keyframes anim-screen-flash {
+            0% { filter: brightness(1); }
+            25% { filter: brightness(2); }
+            50% { filter: brightness(1.5); }
+            75% { filter: brightness(1.8); }
+            100% { filter: brightness(1); }
+        }
+
+        .anim-screen-flash {
+            animation: anim-screen-flash 0.3s ease-out;
+        }
+
+        /* HPフラッシュ（ダメージ表示） */
+        @keyframes anim-hp-flash {
+            0%, 100% { background-color: rgba(239, 68, 68, 0); }
+            25%, 75% { background-color: rgba(239, 68, 68, 0.6); }
+            50% { background-color: rgba(239, 68, 68, 1); }
+        }
+
+        .anim-hp-flash {
+            animation: anim-hp-flash 0.4s ease-out;
+        }
+
+        /* ==========================================
+           特殊状態アニメーション
+           ========================================== */
+
+        /* 毒状態 */
+        @keyframes anim-condition-poison {
+            0%, 100% { box-shadow: 0 0 5px #9c27b0; filter: hue-rotate(0deg); }
+            50% { box-shadow: 0 0 20px #9c27b0; filter: hue-rotate(20deg); }
+        }
+
+        .anim-condition-poison {
+            animation: anim-condition-poison 1.5s ease-in-out infinite;
+        }
+
+        /* やけど状態 */
+        @keyframes anim-condition-burn {
+            0%, 100% { box-shadow: 0 0 5px #ff5722; transform: scale(1); }
+            25% { box-shadow: 0 0 15px #ff5722; transform: scale(1.02); }
+            50% { box-shadow: 0 0 25px #ff5722; transform: scale(1); }
+            75% { box-shadow: 0 0 15px #ff5722; transform: scale(1.01); }
+        }
+
+        .anim-condition-burn {
+            animation: anim-condition-burn 1s ease-in-out infinite;
+        }
+
+        /* ねむり状態 */
+        @keyframes anim-condition-sleep {
+            0%, 100% { opacity: 1; transform: translateY(0); }
+            50% { opacity: 0.6; transform: translateY(3px); }
+        }
+
+        .anim-condition-sleep {
+            animation: anim-condition-sleep 2s ease-in-out infinite;
+        }
+
+        /* まひ状態 */
+        @keyframes anim-condition-paralyze {
+            0%, 90%, 100% { filter: brightness(1); transform: translateX(0); }
+            92%, 96% { filter: brightness(1.5); transform: translateX(-2px); }
+            94%, 98% { filter: brightness(1); transform: translateX(2px); }
+        }
+
+        .anim-condition-paralyze {
+            animation: anim-condition-paralyze 2s linear infinite;
+        }
+
+        /* こんらん状態 */
+        @keyframes anim-condition-confuse {
+            0%, 100% { transform: rotate(0deg); filter: saturate(1); }
+            25% { transform: rotate(3deg); filter: saturate(1.5); }
+            50% { transform: rotate(-3deg); filter: saturate(0.8); }
+            75% { transform: rotate(2deg); filter: saturate(1.3); }
+        }
+
+        .anim-condition-confuse {
+            animation: anim-condition-confuse 1.2s ease-in-out infinite;
+        }
+
+        /* ==========================================
+           タイプ別攻撃エフェクト
+           ========================================== */
+
+        .anim-type-fire { box-shadow: 0 0 30px #ff4444; }
+        .anim-type-water { box-shadow: 0 0 30px #4488ff; }
+        .anim-type-lightning { box-shadow: 0 0 30px #ffff44; }
+        .anim-type-grass { box-shadow: 0 0 30px #44ff44; }
+        .anim-type-psychic { box-shadow: 0 0 30px #ff44ff; }
+        .anim-type-fighting { box-shadow: 0 0 30px #ff8844; }
+        .anim-type-darkness { box-shadow: 0 0 30px #666666; }
+        .anim-type-metal { box-shadow: 0 0 30px #aaaaaa; }
+        .anim-type-fairy { box-shadow: 0 0 30px #ffaaff; }
+        .anim-type-dragon { box-shadow: 0 0 30px #7766ff; }
+        .anim-type-colorless { box-shadow: 0 0 30px rgba(255, 255, 255, 0.8); }
+
         @keyframes fadeInScale {
-            from { 
-                opacity: 0; 
-                transform: scale(0.8) translateY(20px); 
+            from {
+                opacity: 0;
+                transform: scale(0.8) translateY(20px);
             }
-            to { 
-                opacity: 1; 
-                transform: scale(1) translateY(0); 
+
+            to {
+                opacity: 1;
+                transform: scale(1) translateY(0);
             }
         }
-        
+
         .pokemon-action-btn {
             display: flex;
             align-items: center;
-            gap: 12px;
-            padding: 14px 20px;
-            background: linear-gradient(135deg, 
-                #FCD34D 0%,      /* Pokemon Yellow */
-                #F59E0B 50%,     /* Darker Yellow */
-                #D97706 100%);   /* Orange */
-            border: 3px solid #DC2626; /* Pokemon Red border */
-            border-radius: 25px;
-            color: #1F2937; /* Dark text */
+            justify-content: center;
+            gap: clamp(8px, 1vw, 12px);
+            /* タッチターゲット最適化 - 最小44px確保 */
+            min-height: var(--touch-target-min);
+            padding: clamp(12px, 1.5vh, 16px) clamp(16px, 2vw, 24px);
+            background: linear-gradient(135deg,
+                    var(--color-primary) 0%,
+                    var(--color-primary-active) 50%,
+                    #D97706 100%);
+            border: 2px solid #DC2626;
+            border-radius: var(--radius-xl);
+            color: #1F2937;
             font-weight: 700;
-            font-size: 0.9rem;
+            font-size: clamp(0.8rem, 1.2vw, 0.95rem);
             cursor: pointer;
-            transition: all 0.2s ease;
-            box-shadow: 
-                0 6px 20px rgba(0, 0, 0, 0.3),
-                0 0 15px rgba(252, 211, 77, 0.4),
-                inset 0 2px 4px rgba(255, 255, 255, 0.3);
-            backdrop-filter: blur(10px);
-            min-width: 140px;
+            /* スムーズなトランジション */
+            transition:
+                transform var(--transition-spring),
+                box-shadow var(--transition-normal),
+                background var(--transition-normal);
+            box-shadow: var(--shadow-md), var(--shadow-glow);
+            backdrop-filter: blur(8px);
+            min-width: clamp(120px, 16vw, 160px);
+            white-space: nowrap;
+            /* タッチ操作の最適化 */
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            /* GPUアクセラレーション */
+            will-change: transform;
+            transform: translateZ(0);
         }
-        
+
+        /* ホバー状態 - 視覚的フィードバック強化 */
         .pokemon-action-btn:hover {
-            transform: translateY(-3px) scale(1.05);
-            box-shadow: 
-                0 8px 25px rgba(0, 0, 0, 0.4),
-                0 0 20px rgba(252, 211, 77, 0.6),
-                inset 0 2px 4px rgba(255, 255, 255, 0.4);
-            background: linear-gradient(135deg, 
-                #FDE047 0%,      /* Brighter Yellow on hover */
-                #FBBF24 50%,     
-                #F59E0B 100%);
+            transform: translateY(-4px) scale(1.03);
+            box-shadow:
+                var(--shadow-lg),
+                0 0 24px rgba(252, 211, 77, 0.5);
+            background: linear-gradient(135deg,
+                    var(--color-primary-hover) 0%,
+                    var(--color-primary) 50%,
+                    var(--color-primary-active) 100%);
         }
-        
+
+        /* アクティブ（押下）状態 - 即座のフィードバック */
         .pokemon-action-btn:active {
-            transform: translateY(-1px) scale(1.02);
-            box-shadow: 
-                0 4px 15px rgba(0, 0, 0, 0.3),
-                0 0 10px rgba(252, 211, 77, 0.3),
-                inset 0 2px 4px rgba(255, 255, 255, 0.2);
+            transform: translateY(1px) scale(0.98);
+            box-shadow: var(--shadow-sm), 0 0 8px rgba(252, 211, 77, 0.3);
+            transition: transform 50ms ease-out, box-shadow 50ms ease-out;
         }
-        
+
+        /* フォーカス状態 - キーボードナビゲーション対応 */
+        .pokemon-action-btn:focus-visible {
+            outline: var(--focus-ring-width) solid var(--focus-ring-color);
+            outline-offset: var(--focus-ring-offset);
+            box-shadow: var(--shadow-md), 0 0 0 4px rgba(59, 130, 246, 0.3);
+        }
+
+        /* 無効状態 */
+        .pokemon-action-btn:disabled,
+        .pokemon-action-btn[disabled] {
+            /* WCAG AA準拠: opacity 0.65以上でコントラスト確保 */
+            opacity: 0.65;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: var(--shadow-sm);
+            /* グレースケールで無効状態を明示 */
+            filter: grayscale(30%);
+        }
+
         .pokemon-btn-icon {
-            font-size: 1.2rem;
+            font-size: 1.3rem;
             filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.3));
+            /* アイコンのマイクロアニメーション */
+            transition: transform var(--transition-spring);
         }
-        
+
+        .pokemon-action-btn:hover .pokemon-btn-icon {
+            transform: scale(1.15);
+        }
+
+        .pokemon-action-btn:active .pokemon-btn-icon {
+            transform: scale(0.95);
+        }
+
         .pokemon-btn-text {
-            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.15);
             letter-spacing: 0.5px;
+            font-weight: 600;
         }
-        
+
         /* Show/hide animation for buttons */
         .pokemon-action-btn.show {
-            animation: slideInRight var(--anim-fast) ease-out forwards; /* 右からに変更 */
+            animation: slideInRight var(--anim-fast) ease-out forwards;
+            /* 右からに変更 */
         }
-        
+
         .pokemon-action-btn.hide {
-            animation: slideOutRight var(--anim-fast) ease-in forwards; /* 右へに変更 */
+            animation: slideOutRight var(--anim-fast) ease-in forwards;
+            /* 右へに変更 */
         }
-        
-        @keyframes slideInRight { /* 新しいキーフレーム */
-            from { 
-                opacity: 0; 
+
+        @keyframes slideInRight {
+
+            /* 新しいキーフレーム */
+            from {
+                opacity: 0;
                 transform: translateX(100px);
             }
-            to { 
-                opacity: 1; 
+
+            to {
+                opacity: 1;
                 transform: translateX(0);
             }
         }
-        
-        @keyframes slideOutRight { /* 新しいキーフレーム */
-            from { 
-                opacity: 1; 
+
+        @keyframes slideOutRight {
+
+            /* 新しいキーフレーム */
+            from {
+                opacity: 1;
                 transform: translateX(0);
             }
-            to { 
-                opacity: 0; 
+
+            to {
+                opacity: 0;
                 transform: translateX(100px);
             }
         }
-        
+
         /* GPU加速手札インタラクション最適化 */
         #player-hand.hand-dock .hand-slot.hand-card img {
             pointer-events: var(--interaction-events);
             cursor: var(--interaction-cursor);
             will-change: var(--performance-will-change);
         }
+
         #player-hand.hand-dock .hand-slot.hand-card {
             transform: var(--gpu-layer) translateY(-5px) scale(0.95);
             will-change: var(--performance-will-change);
         }
-        
+
         /* Battle Modal Styles - 統合済み (.battle-modal-container に統合) */
-        
+
         .battle-pokemon {
             flex: 1;
             text-align: center;
             padding: 10px;
         }
-        
+
         .pokemon-name {
             font-size: 1.2rem;
             font-weight: bold;
@@ -1599,45 +2589,45 @@
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
             margin-bottom: 8px;
         }
-        
+
         .pokemon-stats {
             font-size: 0.9rem;
             color: #FFFFFF;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
         }
-        
+
         .hp-bar {
             background: rgba(34, 197, 94, 0.7);
             padding: 4px 8px;
             border-radius: 8px;
             margin-bottom: 4px;
         }
-        
+
         .pokemon-type {
             background: rgba(59, 130, 246, 0.7);
             padding: 2px 6px;
             border-radius: 6px;
             margin-bottom: 2px;
         }
-        
+
         .weakness {
             background: rgba(239, 68, 68, 0.7);
             padding: 2px 6px;
             border-radius: 6px;
             margin-bottom: 2px;
         }
-        
+
         .resistance {
             background: rgba(156, 163, 175, 0.7);
             padding: 2px 6px;
             border-radius: 6px;
         }
-        
+
         .vs-indicator {
             flex: 0 0 auto;
             margin: 0 20px;
         }
-        
+
         .vs-text {
             font-size: 2rem;
             font-weight: bold;
@@ -1645,27 +2635,32 @@
             text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8);
             animation: vsGlow 2s infinite alternate;
         }
-        
+
         @keyframes vsGlow {
-            from { text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8), 0 0 10px rgba(252, 211, 77, 0.5); }
-            to { text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8), 0 0 20px rgba(252, 211, 77, 0.8); }
+            from {
+                text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8), 0 0 10px rgba(252, 211, 77, 0.5);
+            }
+
+            to {
+                text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.8), 0 0 20px rgba(252, 211, 77, 0.8);
+            }
         }
-        
+
         .attack-selection {
             margin-top: 15px;
         }
-        
+
         .attack-selection h3 {
             color: #FFFFFF;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
             margin-bottom: 15px;
             text-align: center;
         }
-        
+
         .attack-option {
-            background: linear-gradient(135deg, 
-                rgba(252, 211, 77, 0.2) 0%,
-                rgba(245, 158, 11, 0.2) 100%);
+            background: linear-gradient(135deg,
+                    rgba(252, 211, 77, 0.2) 0%,
+                    rgba(245, 158, 11, 0.2) 100%);
             border: 2px solid rgba(252, 211, 77, 0.4);
             border-radius: 10px;
             padding: 12px;
@@ -1673,15 +2668,15 @@
             cursor: pointer;
             transition: all 0.2s ease;
         }
-        
+
         .attack-option:hover {
-            background: linear-gradient(135deg, 
-                rgba(252, 211, 77, 0.4) 0%,
-                rgba(245, 158, 11, 0.4) 100%);
+            background: linear-gradient(135deg,
+                    rgba(252, 211, 77, 0.4) 0%,
+                    rgba(245, 158, 11, 0.4) 100%);
             border-color: rgba(252, 211, 77, 0.6);
             transform: translateY(-2px);
         }
-        
+
         .attack-name {
             font-size: 1.1rem;
             font-weight: bold;
@@ -1689,19 +2684,20 @@
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
             margin-bottom: 5px;
         }
-        
+
         .attack-details {
             display: flex;
             justify-content: space-between;
             margin-bottom: 5px;
         }
-        
-        .damage, .energy-cost {
+
+        .damage,
+        .energy-cost {
             font-size: 0.9rem;
             color: #FFFFFF;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
         }
-        
+
         .attack-effect {
             font-size: 0.8rem;
             color: #E5E7EB;
@@ -1729,19 +2725,20 @@
 
         /* サイドカード6枚重ね配置スタイル（プレイマット座標を保持） */
         .prize-stack {
-            position: static; /* 位置の包含ブロックにならないようにする */
+            position: static;
+            /* 位置の包含ブロックにならないようにする */
         }
-        
+
         /* Prize back-side offset は JS で相対%指定により適用（px固定を廃止） */
 
-        
+
 
         /* カードハイライトスタイル */
         .card-highlighted {
             position: relative;
             z-index: var(--z-highlight);
         }
-        
+
         /* 手札の拡大サイズに合わせたハイライト */
         .hand-slot.card-highlighted::after {
             content: '';
@@ -1752,12 +2749,14 @@
             bottom: -4px;
             background: linear-gradient(45deg, #ffd700, #ffed4a, #ffd700);
             border-radius: 12px;
-            z-index: -1; /* カードの背面 */
+            z-index: -1;
+            /* カードの背面 */
             animation: pulse-glow 1.5s ease-in-out infinite alternate;
-            transform: scale(1.05) translateY(-8px); /* 手札の拡大に合わせる */
+            transform: scale(1.05) translateY(-8px);
+            /* 手札の拡大に合わせる */
             transform-origin: bottom center;
         }
-        
+
         /* 通常のカードハイライト（手札以外） */
         .card-highlighted:not(.hand-slot)::after {
             content: '';
@@ -1771,12 +2770,13 @@
             z-index: -1;
             animation: pulse-glow 1.5s ease-in-out infinite alternate;
         }
-        
+
         @keyframes pulse-glow {
             0% {
                 opacity: 0.7;
                 transform: scale(1);
             }
+
             100% {
                 opacity: 1;
                 transform: scale(1.02);
@@ -1797,6 +2797,7 @@
                 transform: scale(1);
                 box-shadow: 0 0 0 rgba(255, 215, 0, 0);
             }
+
             100% {
                 transform: scale(1.05);
                 box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
@@ -1808,6 +2809,7 @@
                 transform: scale(1.05);
                 box-shadow: 0 0 20px rgba(255, 215, 0, 0.8);
             }
+
             100% {
                 transform: scale(1);
                 box-shadow: 0 0 0 rgba(255, 215, 0, 0);
@@ -1868,7 +2870,8 @@
             max-width: 100%;
             word-wrap: break-word;
             overflow-wrap: break-word;
-            min-width: 0; /* flexによる縮小を許可 */
+            min-width: 0;
+            /* flexによる縮小を許可 */
         }
 
         .toast-success {
@@ -1898,7 +2901,8 @@
             border: 1px solid rgba(75, 85, 99, 0.6);
             backdrop-filter: blur(8px);
             box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4), 0 0 20px rgba(77, 208, 253, 0.2);
-            pointer-events: none; /* クリックを下の要素に通す */
+            pointer-events: none;
+            /* クリックを下の要素に通す */
         }
 
         .action-hud::before {
@@ -1938,9 +2942,12 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            max-width: calc(100vw - 2rem); /* 画面幅を考慮 */
-            min-width: 0; /* flexによる縮小を許可 */
-            z-index: var(--z-panels); /* 最前面に設定 */
+            max-width: calc(100vw - 2rem);
+            /* 画面幅を考慮 */
+            min-width: 0;
+            /* flexによる縮小を許可 */
+            z-index: var(--z-panels);
+            /* 最前面に設定 */
         }
 
         .opponent-card-display {
@@ -1952,7 +2959,8 @@
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
             background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1));
             border: 2px solid rgba(59, 130, 246, 0.3);
-            aspect-ratio: 5/7; /* カード比率を維持 */
+            aspect-ratio: 5/7;
+            /* カード比率を維持 */
         }
 
         .opponent-card-image {
@@ -1994,39 +3002,99 @@
 
         /* 🎯 カード移動アニメーション */
         @keyframes cardToActive {
-            0% { transform: scale(1) translate(0, 0); opacity: 1; }
-            50% { transform: scale(1.1) translate(0, -20px); opacity: 0.8; }
-            100% { transform: scale(1) translate(0, 0); opacity: 1; }
+            0% {
+                transform: scale(1) translate(0, 0);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.1) translate(0, -20px);
+                opacity: 0.8;
+            }
+
+            100% {
+                transform: scale(1) translate(0, 0);
+                opacity: 1;
+            }
         }
 
         @keyframes cardToBench {
-            0% { transform: scale(1) translateY(0); }
-            50% { transform: scale(0.9) translateY(-10px); }
-            100% { transform: scale(1) translateY(0); }
+            0% {
+                transform: scale(1) translateY(0);
+            }
+
+            50% {
+                transform: scale(0.9) translateY(-10px);
+            }
+
+            100% {
+                transform: scale(1) translateY(0);
+            }
         }
 
         @keyframes cardKnockout {
-            0% { transform: scale(1) rotate(0deg); opacity: 1; }
-            30% { transform: scale(1.1) rotate(5deg); opacity: 0.8; }
-            100% { transform: scale(0.8) rotate(15deg); opacity: 0; }
+            0% {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+
+            30% {
+                transform: scale(1.1) rotate(5deg);
+                opacity: 0.8;
+            }
+
+            100% {
+                transform: scale(0.8) rotate(15deg);
+                opacity: 0;
+            }
         }
 
         @keyframes cardPromote {
-            0% { transform: translateY(0) scale(1); }
-            50% { transform: translateY(-30px) scale(1.05); }
-            100% { transform: translateY(0) scale(1); }
+            0% {
+                transform: translateY(0) scale(1);
+            }
+
+            50% {
+                transform: translateY(-30px) scale(1.05);
+            }
+
+            100% {
+                transform: translateY(0) scale(1);
+            }
         }
 
         @keyframes cardMove {
-            0% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(0.95); opacity: 0.7; }
-            100% { transform: scale(1); opacity: 1; }
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(0.95);
+                opacity: 0.7;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
         }
 
         @keyframes cardDraw {
-            0% { transform: scale(1.2) rotate(5deg); opacity: 0; }
-            50% { transform: scale(1.1) rotate(2deg); opacity: 0.7; }
-            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+            0% {
+                transform: scale(1.2) rotate(5deg);
+                opacity: 0;
+            }
+
+            50% {
+                transform: scale(1.1) rotate(2deg);
+                opacity: 0.7;
+            }
+
+            100% {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
         }
 
 
@@ -2034,191 +3102,478 @@
 
 
         @keyframes screenShake {
-            0%, 100% { transform: translate(0, 0); }
-            10% { transform: translate(calc(-2px * var(--shake-intensity)), 0); }
-            20% { transform: translate(calc(2px * var(--shake-intensity)), 0); }
-            30% { transform: translate(calc(-1px * var(--shake-intensity)), 0); }
+
+            0%,
+            100% {
+                transform: translate(0, 0);
+            }
+
+            10% {
+                transform: translate(calc(-2px * var(--shake-intensity)), 0);
+            }
+
+            20% {
+                transform: translate(calc(2px * var(--shake-intensity)), 0);
+            }
+
+            30% {
+                transform: translate(calc(-1px * var(--shake-intensity)), 0);
+            }
         }
 
         @keyframes screenFlash {
-            0% { filter: brightness(1); }
-            50% { filter: brightness(1.5) contrast(1.2); }
-            100% { filter: brightness(1); }
+            0% {
+                filter: brightness(1);
+            }
+
+            50% {
+                filter: brightness(1.5) contrast(1.2);
+            }
+
+            100% {
+                filter: brightness(1);
+            }
         }
 
         /* 🌟 エフェクトアニメーション */
         @keyframes energyShrink {
-            0% { transform: scale(1); opacity: 1; }
-            100% { transform: scale(0.7); opacity: 0.5; }
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            100% {
+                transform: scale(0.7);
+                opacity: 0.5;
+            }
         }
 
         @keyframes energyIntegrate {
-            0% { transform: scale(1); filter: brightness(1); }
-            50% { transform: scale(1.02); filter: brightness(1.3) saturate(1.2); }
-            100% { transform: scale(1); filter: brightness(1); }
+            0% {
+                transform: scale(1);
+                filter: brightness(1);
+            }
+
+            50% {
+                transform: scale(1.02);
+                filter: brightness(1.3) saturate(1.2);
+            }
+
+            100% {
+                transform: scale(1);
+                filter: brightness(1);
+            }
         }
 
         @keyframes evolutionGlow {
-            0%, 100% { box-shadow: 0 0 0 rgba(255, 255, 255, 0); }
-            50% { box-shadow: 0 0 30px rgba(255, 255, 255, 0.8); }
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(255, 255, 255, 0);
+            }
+
+            50% {
+                box-shadow: 0 0 30px rgba(255, 255, 255, 0.8);
+            }
         }
 
         @keyframes evolutionEmerge {
-            0% { opacity: 0; transform: scale(0.8) rotate(-5deg); }
-            100% { opacity: 1; transform: scale(1) rotate(0deg); }
+            0% {
+                opacity: 0;
+                transform: scale(0.8) rotate(-5deg);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1) rotate(0deg);
+            }
         }
 
         @keyframes healGlow {
-            0%, 100% { box-shadow: 0 0 0 rgba(34, 197, 94, 0); }
-            50% { box-shadow: 0 0 25px rgba(34, 197, 94, 0.7); }
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(34, 197, 94, 0);
+            }
+
+            50% {
+                box-shadow: 0 0 25px rgba(34, 197, 94, 0.7);
+            }
         }
 
         @keyframes prizeGlow {
-            0%, 100% { box-shadow: 0 0 0 rgba(252, 211, 77, 0); }
-            50% { box-shadow: 0 0 30px rgba(252, 211, 77, 0.8); }
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(252, 211, 77, 0);
+            }
+
+            50% {
+                box-shadow: 0 0 30px rgba(252, 211, 77, 0.8);
+            }
         }
 
         @keyframes prizeTake {
-            0% { transform: scale(1) rotate(0deg); }
-            50% { transform: scale(1.1) rotate(5deg); }
-            100% { transform: scale(0.9) rotate(0deg); opacity: 0; }
+            0% {
+                transform: scale(1) rotate(0deg);
+            }
+
+            50% {
+                transform: scale(1.1) rotate(5deg);
+            }
+
+            100% {
+                transform: scale(0.9) rotate(0deg);
+                opacity: 0;
+            }
         }
 
         /* 🎭 UIアニメーション */
         @keyframes gameStart {
-            0% { filter: brightness(1) saturate(1); }
-            50% { filter: brightness(1.3) saturate(1.3); }
-            100% { filter: brightness(1) saturate(1); }
+            0% {
+                filter: brightness(1) saturate(1);
+            }
+
+            50% {
+                filter: brightness(1.3) saturate(1.3);
+            }
+
+            100% {
+                filter: brightness(1) saturate(1);
+            }
         }
 
         @keyframes attackReady {
-            0%, 100% { box-shadow: 0 0 0 rgba(255, 100, 100, 0); }
-            50% { box-shadow: 0 0 20px rgba(255, 100, 100, 0.8); }
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(255, 100, 100, 0);
+            }
+
+            50% {
+                box-shadow: 0 0 20px rgba(255, 100, 100, 0.8);
+            }
         }
 
         @keyframes turnEnd {
-            0% { opacity: 1; transform: scale(1); }
-            100% { opacity: 0.7; transform: scale(0.95); }
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            100% {
+                opacity: 0.7;
+                transform: scale(0.95);
+            }
         }
 
         @keyframes turnStart {
-            0% { opacity: 0.7; transform: scale(0.95); }
-            100% { opacity: 1; transform: scale(1); }
+            0% {
+                opacity: 0.7;
+                transform: scale(0.95);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
         }
 
         @keyframes notificationShow {
-            0% { opacity: 0; transform: translateY(-20px) scale(0.9); }
-            100% { opacity: 1; transform: translateY(0) scale(1); }
+            0% {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.9);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
         }
 
         @keyframes notificationHide {
-            0% { opacity: 1; transform: translateY(0) scale(1); }
-            100% { opacity: 0; transform: translateY(-20px) scale(0.9); }
+            0% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: translateY(-20px) scale(0.9);
+            }
         }
 
         @keyframes modalShow {
-            0% { opacity: 0; transform: scale(0.95); }
-            100% { opacity: 1; transform: scale(1); }
+            0% {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
         }
 
         @keyframes modalHide {
-            0% { opacity: 1; transform: scale(1); }
-            100% { opacity: 0; transform: scale(0.95); }
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+
+            100% {
+                opacity: 0;
+                transform: scale(0.95);
+            }
         }
 
         @keyframes loadingShow {
-            0% { opacity: 0; }
-            100% { opacity: 1; }
+            0% {
+                opacity: 0;
+            }
+
+            100% {
+                opacity: 1;
+            }
         }
 
         @keyframes loadingHide {
-            0% { opacity: 1; }
-            100% { opacity: 0; }
+            0% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: 0;
+            }
         }
 
         /* 🔥 タイプ別エフェクト */
         @keyframes typeFire {
-            0%, 100% { box-shadow: 0 0 0 rgba(255, 107, 53, 0); filter: hue-rotate(0deg); }
-            50% { box-shadow: 0 0 30px rgba(255, 107, 53, 0.8); filter: hue-rotate(10deg); }
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(255, 107, 53, 0);
+                filter: hue-rotate(0deg);
+            }
+
+            50% {
+                box-shadow: 0 0 30px rgba(255, 107, 53, 0.8);
+                filter: hue-rotate(10deg);
+            }
         }
 
         @keyframes typeWater {
-            0%, 100% { box-shadow: 0 0 0 rgba(79, 195, 247, 0); filter: hue-rotate(0deg); }
-            50% { box-shadow: 0 0 30px rgba(79, 195, 247, 0.8); filter: hue-rotate(-10deg); }
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(79, 195, 247, 0);
+                filter: hue-rotate(0deg);
+            }
+
+            50% {
+                box-shadow: 0 0 30px rgba(79, 195, 247, 0.8);
+                filter: hue-rotate(-10deg);
+            }
         }
 
         @keyframes typeGrass {
-            0%, 100% { box-shadow: 0 0 0 rgba(102, 187, 106, 0); filter: hue-rotate(0deg); }
-            50% { box-shadow: 0 0 30px rgba(102, 187, 106, 0.8); filter: hue-rotate(15deg); }
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(102, 187, 106, 0);
+                filter: hue-rotate(0deg);
+            }
+
+            50% {
+                box-shadow: 0 0 30px rgba(102, 187, 106, 0.8);
+                filter: hue-rotate(15deg);
+            }
         }
 
         @keyframes typeLightning {
-            0%, 100% { box-shadow: 0 0 0 rgba(255, 235, 59, 0); filter: brightness(1); }
-            50% { box-shadow: 0 0 35px rgba(255, 235, 59, 0.9); filter: brightness(1.2); }
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(255, 235, 59, 0);
+                filter: brightness(1);
+            }
+
+            50% {
+                box-shadow: 0 0 35px rgba(255, 235, 59, 0.9);
+                filter: brightness(1.2);
+            }
         }
 
         /* 🎯 新統一アニメーションクラス */
-        .animate-card-to-active { animation: cardToActive var(--anim-normal) var(--anim-ease-default); }
-        .animate-card-to-bench { animation: cardToBench var(--anim-normal) var(--anim-ease-default); }
-        .animate-card-knockout { animation: cardKnockout var(--anim-slow) var(--anim-ease-default) forwards; }
-        .animate-card-promote { animation: cardPromote var(--anim-normal) var(--anim-ease-bounce); }
-        .animate-card-move { animation: cardMove var(--anim-normal) var(--anim-ease-default); }
-        .animate-card-draw { animation: cardDraw var(--anim-normal) var(--anim-ease-default); }
-        .animate-deck-lift { animation: deckLift var(--anim-fast) var(--anim-ease-default); }
+        .animate-card-to-active {
+            animation: cardToActive var(--anim-normal) var(--anim-ease-default);
+        }
 
-        .animate-attack-forward { animation: attackForward var(--anim-combat) var(--anim-ease-default); }
-        .animate-damage-shake { animation: damageShake var(--anim-combat) var(--anim-ease-default); }
-        .animate-screen-shake { animation: screenShake var(--anim-combat) var(--anim-ease-default); }
-        .animate-screen-flash { animation: screenFlash var(--anim-fast) var(--anim-ease-default); }
-        .animate-hp-flash { animation: hpFlash var(--anim-combat) var(--anim-ease-default); }
+        .animate-card-to-bench {
+            animation: cardToBench var(--anim-normal) var(--anim-ease-default);
+        }
 
-        .animate-energy-shrink { animation: energyShrink var(--anim-fast) var(--anim-ease-default); }
-        .animate-energy-integrate { animation: energyIntegrate var(--anim-normal) var(--anim-ease-default); }
-        .animate-evolution-glow { animation: evolutionGlow var(--anim-slow) var(--anim-ease-default); }
-        .animate-evolution-emerge { animation: evolutionEmerge var(--anim-slow) var(--anim-ease-default); }
-        .animate-heal-glow { animation: healGlow var(--anim-normal) var(--anim-ease-default); }
-        .animate-prize-glow { animation: prizeGlow var(--anim-normal) var(--anim-ease-default); }
-        .animate-prize-take { animation: prizeTake var(--anim-normal) var(--anim-ease-default); }
+        .animate-card-knockout {
+            animation: cardKnockout var(--anim-slow) var(--anim-ease-default) forwards;
+        }
 
-        .animate-game-start { animation: gameStart var(--anim-slow) var(--anim-ease-default); }
-        .animate-attack-ready { animation: attackReady 2s var(--anim-ease-default) infinite; }
-        .animate-turn-end { animation: turnEnd var(--anim-normal) var(--anim-ease-default); }
-        .animate-turn-start { animation: turnStart var(--anim-normal) var(--anim-ease-default); }
-        .animate-notification-show { animation: notificationShow var(--anim-normal) var(--anim-ease-bounce); }
-        .animate-notification-hide { animation: notificationHide var(--anim-normal) var(--anim-ease-default); }
-        .animate-modal-show { animation: modalShow var(--anim-normal) var(--anim-ease-bounce); }
-        .animate-modal-hide { animation: modalHide var(--anim-normal) var(--anim-ease-default); }
-        .animate-loading-show { animation: loadingShow var(--anim-fast) var(--anim-ease-default); }
-        .animate-loading-hide { animation: loadingHide var(--anim-fast) var(--anim-ease-default); }
+        .animate-card-promote {
+            animation: cardPromote var(--anim-normal) var(--anim-ease-bounce);
+        }
 
-        .animate-type-fire { animation: typeFire var(--anim-combat) var(--anim-ease-default); }
-        .animate-type-water { animation: typeWater var(--anim-combat) var(--anim-ease-default); }
-        .animate-type-grass { animation: typeGrass var(--anim-combat) var(--anim-ease-default); }
-        .animate-type-lightning { animation: typeLightning var(--anim-combat) var(--anim-ease-default); }
+        .animate-card-move {
+            animation: cardMove var(--anim-normal) var(--anim-ease-default);
+        }
+
+        .animate-card-draw {
+            animation: cardDraw var(--anim-normal) var(--anim-ease-default);
+        }
+
+        .animate-deck-lift {
+            animation: deckLift var(--anim-fast) var(--anim-ease-default);
+        }
+
+        .animate-attack-forward {
+            animation: attackForward var(--anim-combat) var(--anim-ease-default);
+        }
+
+        .animate-damage-shake {
+            animation: damageShake var(--anim-combat) var(--anim-ease-default);
+        }
+
+        .animate-screen-shake {
+            animation: screenShake var(--anim-combat) var(--anim-ease-default);
+        }
+
+        .animate-screen-flash {
+            animation: screenFlash var(--anim-fast) var(--anim-ease-default);
+        }
+
+        .animate-hp-flash {
+            animation: hpFlash var(--anim-combat) var(--anim-ease-default);
+        }
+
+        .animate-energy-shrink {
+            animation: energyShrink var(--anim-fast) var(--anim-ease-default);
+        }
+
+        .animate-energy-integrate {
+            animation: energyIntegrate var(--anim-normal) var(--anim-ease-default);
+        }
+
+        .animate-evolution-glow {
+            animation: evolutionGlow var(--anim-slow) var(--anim-ease-default);
+        }
+
+        .animate-evolution-emerge {
+            animation: evolutionEmerge var(--anim-slow) var(--anim-ease-default);
+        }
+
+        .animate-heal-glow {
+            animation: healGlow var(--anim-normal) var(--anim-ease-default);
+        }
+
+        .animate-prize-glow {
+            animation: prizeGlow var(--anim-normal) var(--anim-ease-default);
+        }
+
+        .animate-prize-take {
+            animation: prizeTake var(--anim-normal) var(--anim-ease-default);
+        }
+
+        .animate-game-start {
+            animation: gameStart var(--anim-slow) var(--anim-ease-default);
+        }
+
+        .animate-attack-ready {
+            animation: attackReady 2s var(--anim-ease-default) infinite;
+        }
+
+        .animate-turn-end {
+            animation: turnEnd var(--anim-normal) var(--anim-ease-default);
+        }
+
+        .animate-turn-start {
+            animation: turnStart var(--anim-normal) var(--anim-ease-default);
+        }
+
+        .animate-notification-show {
+            animation: notificationShow var(--anim-normal) var(--anim-ease-bounce);
+        }
+
+        .animate-notification-hide {
+            animation: notificationHide var(--anim-normal) var(--anim-ease-default);
+        }
+
+        .animate-modal-show {
+            animation: modalShow var(--anim-normal) var(--anim-ease-bounce);
+        }
+
+        .animate-modal-hide {
+            animation: modalHide var(--anim-normal) var(--anim-ease-default);
+        }
+
+        .animate-loading-show {
+            animation: loadingShow var(--anim-fast) var(--anim-ease-default);
+        }
+
+        .animate-loading-hide {
+            animation: loadingHide var(--anim-fast) var(--anim-ease-default);
+        }
+
+        .animate-type-fire {
+            animation: typeFire var(--anim-combat) var(--anim-ease-default);
+        }
+
+        .animate-type-water {
+            animation: typeWater var(--anim-combat) var(--anim-ease-default);
+        }
+
+        .animate-type-grass {
+            animation: typeGrass var(--anim-combat) var(--anim-ease-default);
+        }
+
+        .animate-type-lightning {
+            animation: typeLightning var(--anim-combat) var(--anim-ease-default);
+        }
 
         /* エネルギーグロー効果（タイプ別） */
-        .animate-energy-glow-fire { 
+        .animate-energy-glow-fire {
             animation: typeFire var(--anim-normal) var(--anim-ease-default);
             z-index: var(--z-card-effects);
         }
-        .animate-energy-glow-water { 
+
+        .animate-energy-glow-water {
             animation: typeWater var(--anim-normal) var(--anim-ease-default);
             z-index: var(--z-card-effects);
         }
-        .animate-energy-glow-grass { 
+
+        .animate-energy-glow-grass {
             animation: typeGrass var(--anim-normal) var(--anim-ease-default);
             z-index: var(--z-card-effects);
         }
-        .animate-energy-glow-lightning { 
+
+        .animate-energy-glow-lightning {
             animation: typeLightning var(--anim-normal) var(--anim-ease-default);
             z-index: var(--z-card-effects);
         }
 
         /* 通知スタイリング */
-        .animate-notification-success { background: linear-gradient(135deg, rgba(34, 197, 94, 0.9), rgba(21, 128, 61, 0.9)); }
-        .animate-notification-error { background: linear-gradient(135deg, rgba(239, 68, 68, 0.9), rgba(185, 28, 28, 0.9)); }
-        .animate-notification-warning { background: linear-gradient(135deg, rgba(245, 158, 11, 0.9), rgba(217, 119, 6, 0.9)); }
-        .animate-notification-info { background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(29, 78, 216, 0.9)); }
+        .animate-notification-success {
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.9), rgba(21, 128, 61, 0.9));
+        }
+
+        .animate-notification-error {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.9), rgba(185, 28, 28, 0.9));
+        }
+
+        .animate-notification-warning {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.9), rgba(217, 119, 6, 0.9));
+        }
+
+        .animate-notification-info {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(29, 78, 216, 0.9));
+        }
 
         /* パフォーマンス最適化 - 低品質モード */
         @media (prefers-reduced-motion: reduce) {
@@ -2229,7 +3584,7 @@
                 --anim-slow: 0ms;
                 --anim-combat: 0ms;
             }
-            
+
             * {
                 animation-duration: 0ms !important;
                 animation-delay: 0ms !important;
@@ -2244,6 +3599,7 @@
                 opacity: 1;
                 transform: scale(1) translateY(0);
             }
+
             to {
                 opacity: 0;
                 transform: scale(0.95) translateY(-10px);
@@ -2255,6 +3611,7 @@
                 transform: translateY(-20px);
                 opacity: 0;
             }
+
             to {
                 transform: translateY(0);
                 opacity: 1;
@@ -2266,6 +3623,7 @@
                 transform: translateY(0);
                 opacity: 1;
             }
+
             to {
                 transform: translateY(-10px);
                 opacity: 0;
@@ -2277,6 +3635,7 @@
                 opacity: 0;
                 transform: scale(0.8) translateY(10px);
             }
+
             to {
                 opacity: 1;
                 transform: scale(1) translateY(0);
@@ -2310,14 +3669,14 @@
                 margin: 1rem;
                 max-width: calc(100vw - 2rem);
             }
-            
+
             .toast-container {
                 top: 1rem;
                 right: 1rem;
                 left: 1rem;
                 max-width: calc(100vw - 2rem);
             }
-            
+
             .toast-item {
                 margin-bottom: 0.5rem;
                 padding: 0.875rem;
@@ -2361,7 +3720,7 @@
                 left: 0.5rem;
                 max-width: calc(100vw - 1rem);
             }
-            
+
             .toast-item {
                 margin-bottom: 0.4rem;
                 padding: 0.75rem;
@@ -2392,7 +3751,7 @@
                 border: 2px solid #ffffff;
                 background: #000000;
             }
-            
+
             .toast-item {
                 border: 2px solid #ffffff;
             }
@@ -2400,12 +3759,15 @@
 
         /* アニメーション無効化対応 */
         @media (prefers-reduced-motion: reduce) {
-            .modal-enter, .modal-exit,
-            .toast-enter, .toast-exit,
+
+            .modal-enter,
+            .modal-exit,
+            .toast-enter,
+            .toast-exit,
             .hud-enter {
                 animation: none;
             }
-            
+
             .central-modal-content,
             .toast-item,
             .action-hud {
@@ -2423,284 +3785,398 @@
             background: rgba(0, 0, 0, 0.55);
             backdrop-filter: blur(2px);
         }
+
         .game-result-container {
             position: relative;
             width: min(680px, 92vw);
             border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
         }
-        .game-result-container.victory-result { 
-            background: linear-gradient(160deg, rgba(32,32,48,0.96), rgba(24,24,32,0.96)); 
+
+        .game-result-container.victory-result {
+            background: linear-gradient(160deg, rgba(32, 32, 48, 0.96), rgba(24, 24, 32, 0.96));
         }
-        .game-result-container.defeat-result { 
-            background: linear-gradient(160deg, rgba(20,18,26,0.96), rgba(16,14,22,0.96)); 
+
+        .game-result-container.defeat-result {
+            background: linear-gradient(160deg, rgba(20, 18, 26, 0.96), rgba(16, 14, 22, 0.96));
         }
 
         .result-background-decoration {
-            position: absolute; 
+            position: absolute;
             inset: 0;
-            background: radial-gradient(1200px 400px at -10% -10%, rgba(255,215,0,0.12), transparent 60%),
-                        radial-gradient(1000px 500px at 110% 110%, rgba(66, 153, 225, 0.12), transparent 60%);
+            background: radial-gradient(1200px 400px at -10% -10%, rgba(255, 215, 0, 0.12), transparent 60%),
+                radial-gradient(1000px 500px at 110% 110%, rgba(66, 153, 225, 0.12), transparent 60%);
             pointer-events: none;
         }
-        .result-content { 
-            position: relative; 
-            padding: 28px 28px 22px; 
-            color: #fff; 
-        }
-        .result-banner { 
-            text-align: center; 
-            margin-bottom: 8px; 
-        }
-        .result-title { 
-            font-size: 42px; 
-            letter-spacing: 2px; 
-            font-weight: 800; 
-        }
-        .victory-result .result-title { 
-            color: #fde68a; 
-            text-shadow: 0 0 18px rgba(253, 230, 138, 0.5); 
-        }
-        .defeat-result .result-title { 
-            color: #93c5fd; 
-            text-shadow: 0 0 14px rgba(147, 197, 253, 0.35); 
-        }
-        .result-subtitle { 
-            font-size: 16px; 
-            opacity: 0.9; 
-            margin-top: 4px; 
+
+        .result-content {
+            position: relative;
+            padding: 28px 28px 22px;
+            color: #fff;
         }
 
-        .result-details { 
-            display: grid; 
-            gap: 16px; 
-            margin: 20px 0 8px; 
-        }
-        .result-reason { 
-            background: rgba(255,255,255,0.06); 
-            border: 1px solid rgba(255,255,255,0.08); 
-            border-radius: 10px; 
-            padding: 12px 14px; 
-        }
-        .reason-label { 
-            font-size: 12px; 
-            opacity: 0.8; 
-            margin-bottom: 4px; 
-        }
-        .reason-text { 
-            font-size: 14px; 
-            line-height: 1.6; 
-        }
-        .result-stats { 
-            display: grid; 
-            grid-template-columns: repeat(3, 1fr); 
-            gap: 10px; 
-        }
-        .stat-item { 
-            background: rgba(255,255,255,0.06); 
-            border: 1px solid rgba(255,255,255,0.08); 
-            border-radius: 10px; 
-            padding: 10px 12px; 
-            text-align: center; 
-        }
-        .stat-label { 
-            font-size: 12px; 
-            opacity: 0.8; 
-        }
-        .stat-value { 
-            font-size: 18px; 
-            font-weight: 700; 
-            margin-top: 2px; 
+        .result-banner {
+            text-align: center;
+            margin-bottom: 8px;
         }
 
-        .result-actions { 
-            display: flex; 
-            gap: 10px; 
-            justify-content: center; 
-            margin-top: 16px; 
-        }
-        .result-btn { 
-            display: inline-flex; 
-            align-items: center; 
-            gap: 8px; 
-            padding: 10px 14px; 
-            border-radius: 10px; 
-            font-weight: 700; 
-            transition: transform .15s ease, filter .15s ease; 
-        }
-        .result-btn.primary-btn { 
-            background: #2563eb; 
-            color: #fff; 
-        }
-        .result-btn.primary-btn:hover { 
-            filter: brightness(1.1); 
-            transform: translateY(-1px); 
-        }
-        .result-btn.secondary-btn { 
-            background: #374151; 
-            color: #fff; 
-        }
-        .result-btn.secondary-btn:hover { 
-            filter: brightness(1.05); 
-            transform: translateY(-1px); 
-        }
-        .btn-icon { 
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.4)); 
+        .result-title {
+            font-size: 42px;
+            letter-spacing: 2px;
+            font-weight: 800;
         }
 
-        .result-modal-enter .game-result-container { 
-            animation: modalPopIn 220ms ease-out; 
-        }
-        .result-modal-exit .game-result-container { 
-            animation: modalFadeOut 180ms ease-in forwards; 
-        }
-        @keyframes modalPopIn { 
-            from { 
-                transform: translateY(10px) scale(.98); 
-                opacity: 0; 
-            } 
-            to { 
-                transform: translateY(0) scale(1); 
-                opacity: 1; 
-            } 
-        }
-        @keyframes modalFadeOut { 
-            to { 
-                transform: translateY(4px) scale(.98); 
-                opacity: 0; 
-            } 
+        .victory-result .result-title {
+            color: #fde68a;
+            text-shadow: 0 0 18px rgba(253, 230, 138, 0.5);
         }
 
-        .result-particles { 
-            position: absolute; 
-            inset: 0; 
-            pointer-events: none; 
-        }
-        .victory-particle::before { 
-            content: var(--particle-emoji, '✨'); 
-            position: absolute; 
-            animation: floatUp 3s ease-in infinite; 
-        }
-        @keyframes floatUp { 
-            from { 
-                transform: translateY(20px); 
-                opacity: .0; 
-            } 
-            20% { 
-                opacity: .8; 
-            } 
-            to { 
-                transform: translateY(-60px); 
-                opacity: 0; 
-            } 
-        }
-        .defeat-particle { 
-            position: absolute; 
-            top: -10px; 
-            width: 8px; 
-            height: 14px; 
-            background: linear-gradient(#60a5fa, transparent); 
-            border-radius: 4px; 
-            animation: rainDown 4s linear infinite; 
-        }
-        @keyframes rainDown { 
-            from { 
-                transform: translateY(-10px); 
-                opacity: .0; 
-            } 
-            10% { 
-                opacity: .7; 
-            } 
-            to { 
-                transform: translateY(120%); 
-                opacity: 0; 
-            } 
+        .defeat-result .result-title {
+            color: #93c5fd;
+            text-shadow: 0 0 14px rgba(147, 197, 253, 0.35);
         }
 
+        .result-subtitle {
+            font-size: 16px;
+            opacity: 0.9;
+            margin-top: 4px;
+        }
+
+        .result-details {
+            display: grid;
+            gap: 16px;
+            margin: 20px 0 8px;
+        }
+
+        .result-reason {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 12px 14px;
+        }
+
+        .reason-label {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 4px;
+        }
+
+        .reason-text {
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .stat-item {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 10px 12px;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 700;
+            margin-top: 2px;
+        }
+
+        .result-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 16px;
+        }
+
+        .result-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-weight: 700;
+            transition: transform .15s ease, filter .15s ease;
+        }
+
+        .result-btn.primary-btn {
+            background: #2563eb;
+            color: #fff;
+        }
+
+        .result-btn.primary-btn:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .result-btn.secondary-btn {
+            background: #374151;
+            color: #fff;
+        }
+
+        .result-btn.secondary-btn:hover {
+            filter: brightness(1.05);
+            transform: translateY(-1px);
+        }
+
+        .btn-icon {
+            filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+        }
+
+        .result-modal-enter .game-result-container {
+            animation: modalPopIn 220ms ease-out;
+        }
+
+        .result-modal-exit .game-result-container {
+            animation: modalFadeOut 180ms ease-in forwards;
+        }
+
+        @keyframes modalPopIn {
+            from {
+                transform: translateY(10px) scale(.98);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes modalFadeOut {
+            to {
+                transform: translateY(4px) scale(.98);
+                opacity: 0;
+            }
+        }
+
+        .result-particles {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+
+        .victory-particle::before {
+            content: var(--particle-emoji, '✨');
+            position: absolute;
+            animation: floatUp 3s ease-in infinite;
+        }
+
+        @keyframes floatUp {
+            from {
+                transform: translateY(20px);
+                opacity: .0;
+            }
+
+            20% {
+                opacity: .8;
+            }
+
+            to {
+                transform: translateY(-60px);
+                opacity: 0;
+            }
+        }
+
+        .defeat-particle {
+            position: absolute;
+            top: -10px;
+            width: 8px;
+            height: 14px;
+            background: linear-gradient(#60a5fa, transparent);
+            border-radius: 4px;
+            animation: rainDown 4s linear infinite;
+        }
+
+        @keyframes rainDown {
+            from {
+                transform: translateY(-10px);
+                opacity: .0;
+            }
+
+            10% {
+                opacity: .7;
+            }
+
+            to {
+                transform: translateY(120%);
+                opacity: 0;
+            }
+        }
+
+        /* FOUC Prevention & Layout Fixes */
+        #game-board {
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        body.game-ready #game-board {
+            opacity: 1;
+        }
+
+        body.three-active #game-board {
+            visibility: hidden !important;
+            pointer-events: none !important;
+            opacity: 0 !important;
+        }
+
+        /* Three.js Container - Fixed Background */
+        #three-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 1;
+            /* Low z-index but above background */
+            pointer-events: auto;
+            /* Catch clicks */
+        }
+
+        /* Ensure game wrapper is above three container if needed, but transparent */
+        .game-wrapper {
+            position: relative;
+            z-index: 10;
+            pointer-events: none;
+            /* Let clicks pass through to 3D canvas */
+        }
+
+        #game-stage {
+            pointer-events: none;
+        }
+
+        /* Enable pointer events for interactive elements */
+        #game-status-panel,
+        #player-hand-container,
+        .game-footer,
+        .cpu-hand-independent {
+            pointer-events: auto;
+        }
+
+        @keyframes turnStarting {
+            from {
+                transform: scale(0.95);
+                opacity: 0.7;
+            }
+
+            to {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
     </style>
 </head>
+
 <body class="min-h-screen text-white">
+    <!-- Three.js 3D Canvas Layer (Global Background) -->
+    <div id="three-container"></div>
+
     <div class="game-wrapper">
 
-    <div id="game-stage" class="game-stage w-full flex flex-col items-center" style="gap: calc(var(--vertical-gap)/2);">
-        <div id="game-board">
-        <img class="board-bg" src="assets/playmat/playmat.jpg" alt="Playmat" onerror="this.style.display='none'"/>
-        
-        <!-- 相手プレイヤーのフィールド -->
-        <div id="cpu-board" class="player-board opponent-board">
-            <!-- Active Pokemon -->
-            <div class="card-slot active-top" data-zone="Active"></div>
-            
-            <!-- Bench Row (5 slots) -->
-            <div class="card-slot top-bench-1" data-zone="Bench"></div>
-            <div class="card-slot top-bench-2" data-zone="Bench"></div>
-            <div class="card-slot top-bench-3" data-zone="Bench"></div>
-            <div class="card-slot top-bench-4" data-zone="Bench"></div>
-            <div class="card-slot top-bench-5" data-zone="Bench"></div>
-            
-            <!-- Side Cards (6 cards in 3 stacks) -->
-            <div class="side-cards-container side-right">
-                <div class="prize-stack prize-stack-1">
-                    <div class="card-slot side-right-1" data-zone="Prize" data-prize-index="0"></div>
-                    <div class="card-slot side-right-1-back" data-zone="Prize" data-prize-index="1"></div>
-                </div>
-                <div class="prize-stack prize-stack-2">
-                    <div class="card-slot side-right-2" data-zone="Prize" data-prize-index="2"></div>
-                    <div class="card-slot side-right-2-back" data-zone="Prize" data-prize-index="3"></div>
-                </div>
-                <div class="prize-stack prize-stack-3">
-                    <div class="card-slot side-right-3" data-zone="Prize" data-prize-index="4"></div>
-                    <div class="card-slot side-right-3-back" data-zone="Prize" data-prize-index="5"></div>
-                </div>
-            </div>
-            
-            <!-- Deck and Discard -->
-            <div class="card-slot deck-container top-left-deck" data-zone="Deck">
-                <div class="deck-stack"></div>
-            </div>
-            <div class="card-slot top-left-trash" data-zone="Trash"></div>
-        </div>
+        <div id="game-stage" class="game-stage w-full flex flex-col items-center"
+            style="gap: calc(var(--vertical-gap)/2);">
 
-        <!-- Stadium Zone (Shared) -->
-        <div class="card-slot stadium-zone" data-zone="Stadium"></div>
+            <div id="game-board">
+                <img class="board-bg" src="assets/playmat/playmat.jpg" alt="Playmat"
+                    onerror="this.style.display='none'" />
 
-        <!-- 自分プレイヤーのフィールド -->
-        <div class="player-board player-self">
-            <!-- Active Pokemon -->
-            <div class="card-slot active-bottom" data-zone="Active"></div>
-            
-            <!-- Bench Row (5 slots) -->
-            <div class="card-slot bottom-bench-1" data-zone="Bench"></div>
-            <div class="card-slot bottom-bench-2" data-zone="Bench"></div>
-            <div class="card-slot bottom-bench-3" data-zone="Bench"></div>
-            <div class="card-slot bottom-bench-4" data-zone="Bench"></div>
-            <div class="card-slot bottom-bench-5" data-zone="Bench"></div>
-            
-            <!-- Side Cards (6 cards in 3 stacks) -->
-            <div class="side-cards-container side-left">
-                <div class="prize-stack prize-stack-1">
-                    <div class="card-slot side-left-1" data-zone="Prize" data-prize-index="0"></div>
-                    <div class="card-slot side-left-1-back" data-zone="Prize" data-prize-index="1"></div>
+                <!-- 相手プレイヤーのフィールド -->
+                <div id="cpu-board" class="player-board opponent-board">
+                    <!-- Active Pokemon -->
+                    <div class="card-slot active-top" data-zone="Active" data-orientation="flipped"></div>
+
+
+                    <!-- Bench Row (5 slots) -->
+                    <div class="card-slot top-bench-1" data-zone="Bench" data-orientation="flipped"></div>
+                    <div class="card-slot top-bench-2" data-zone="Bench" data-orientation="flipped"></div>
+                    <div class="card-slot top-bench-3" data-zone="Bench" data-orientation="flipped"></div>
+                    <div class="card-slot top-bench-4" data-zone="Bench" data-orientation="flipped"></div>
+                    <div class="card-slot top-bench-5" data-zone="Bench" data-orientation="flipped"></div>
+
+                    <!-- Side Cards (6 cards in 3 stacks) -->
+                    <div class="side-cards-container side-right">
+                        <div class="prize-stack prize-stack-1">
+                            <div class="card-slot side-right-1" data-zone="Prize" data-prize-index="0"
+                                data-orientation="flipped"></div>
+                            <div class="card-slot side-right-1-back" data-zone="Prize" data-prize-index="1"
+                                data-orientation="flipped"></div>
+                        </div>
+                        <div class="prize-stack prize-stack-2">
+                            <div class="card-slot side-right-2" data-zone="Prize" data-prize-index="2"
+                                data-orientation="flipped"></div>
+                            <div class="card-slot side-right-2-back" data-zone="Prize" data-prize-index="3"
+                                data-orientation="flipped"></div>
+                        </div>
+                        <div class="prize-stack prize-stack-3">
+                            <div class="card-slot side-right-3" data-zone="Prize" data-prize-index="4"
+                                data-orientation="flipped"></div>
+                            <div class="card-slot side-right-3-back" data-zone="Prize" data-prize-index="5"
+                                data-orientation="flipped"></div>
+                        </div>
+                    </div>
+
+                    <!-- Deck and Discard (these stay upright) -->
+                    <div class="card-slot deck-container top-left-deck" data-zone="Deck" data-orientation="upright">
+                        <div class="deck-stack"></div>
+                    </div>
+                    <div class="card-slot top-left-trash" data-zone="Trash" data-orientation="upright"></div>
                 </div>
-                <div class="prize-stack prize-stack-2">
-                    <div class="card-slot side-left-2" data-zone="Prize" data-prize-index="2"></div>
-                    <div class="card-slot side-left-2-back" data-zone="Prize" data-prize-index="3"></div>
-                </div>
-                <div class="prize-stack prize-stack-3">
-                    <div class="card-slot side-left-3" data-zone="Prize" data-prize-index="4"></div>
-                    <div class="card-slot side-left-3-back" data-zone="Prize" data-prize-index="5"></div>
+
+                <!-- Stadium Zone (Shared) -->
+                <div class="card-slot stadium-zone" data-zone="Stadium" data-orientation="upright"></div>
+
+                <!-- 自分プレイヤーのフィールド -->
+                <div class="player-board player-self">
+                    <!-- Active Pokemon -->
+                    <div class="card-slot active-bottom" data-zone="Active" data-orientation="upright"></div>
+
+                    <!-- Bench Row (5 slots) -->
+                    <div class="card-slot bottom-bench-1" data-zone="Bench" data-orientation="upright"></div>
+                    <div class="card-slot bottom-bench-2" data-zone="Bench" data-orientation="upright"></div>
+                    <div class="card-slot bottom-bench-3" data-zone="Bench" data-orientation="upright"></div>
+                    <div class="card-slot bottom-bench-4" data-zone="Bench" data-orientation="upright"></div>
+                    <div class="card-slot bottom-bench-5" data-zone="Bench" data-orientation="upright"></div>
+
+                    <!-- Side Cards (6 cards in 3 stacks) -->
+                    <div class="side-cards-container side-left">
+                        <div class="prize-stack prize-stack-1">
+                            <div class="card-slot side-left-1" data-zone="Prize" data-prize-index="0"
+                                data-orientation="upright"></div>
+                            <div class="card-slot side-left-1-back" data-zone="Prize" data-prize-index="1"
+                                data-orientation="upright"></div>
+                        </div>
+                        <div class="prize-stack prize-stack-2">
+                            <div class="card-slot side-left-2" data-zone="Prize" data-prize-index="2"
+                                data-orientation="upright"></div>
+                            <div class="card-slot side-left-2-back" data-zone="Prize" data-prize-index="3"
+                                data-orientation="upright"></div>
+                        </div>
+                        <div class="prize-stack prize-stack-3">
+                            <div class="card-slot side-left-3" data-zone="Prize" data-prize-index="4"
+                                data-orientation="upright"></div>
+                            <div class="card-slot side-left-3-back" data-zone="Prize" data-prize-index="5"
+                                data-orientation="upright"></div>
+                        </div>
+                    </div>
+
+                    <!-- Deck and Discard -->
+                    <div class="card-slot deck-container bottom-right-deck" data-zone="Deck" data-orientation="upright">
+                        <div class="deck-stack"></div>
+                    </div>
+                    <div class="card-slot bottom-right-trash" data-zone="Trash" data-orientation="upright"></div>
                 </div>
             </div>
-            
-            <!-- Deck and Discard -->
-            <div class="card-slot deck-container bottom-right-deck" data-zone="Deck">
-                <div class="deck-stack"></div>
-            </div>
-            <div class="card-slot bottom-right-trash" data-zone="Trash"></div>
         </div>
-    </div>
-    </div>
 
         <!-- CPU Hand Container (Independent) -->
         <div id="cpu-hand-area-new" class="cpu-hand-independent">
@@ -2759,9 +4235,11 @@
             <!-- Header Section -->
             <div class="status-panel-header">
                 <div class="flex justify-between items-center mb-2">
-                    <div class="text-lg font-bold text-white" style="text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);">ゲーム状況</div>
+                    <div class="text-lg font-bold text-white" style="text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);">ゲーム状況
+                    </div>
                     <div class="text-sm text-yellow-300">
-                        <span id="turn-player" class="font-semibold" style="text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);">YOU</span>
+                        <span id="turn-player" class="font-semibold"
+                            style="text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);">YOU</span>
                     </div>
                 </div>
                 <div class="text-xs text-white" style="text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);">
@@ -2818,31 +4296,28 @@
         </div>
     </div>
 
-<!-- Card Info Panel -->
-<div id="card-info-panel" class="hidden fixed"></div>
+    <!-- Card Info Panel -->
+    <div id="card-info-panel" class="hidden fixed"></div>
 
 
 
     <script>
         // Expose noop globally so modules can reuse it without errors
         // GitHub Pages環境では静的ホスティングのためデバッグログを最小化
-        window.noop = console.log ? console.log.bind(console) : () => {};
-        
+        window.noop = console.log ? console.log.bind(console) : () => { };
+
         // パフォーマンス最適化：不要なログを制限
         if (window.location.hostname.includes('github.io')) {
-            console.log = () => {};
-            console.debug = () => {};
-            window.noop = () => {};
+            console.log = () => { };
+            console.debug = () => { };
+            window.noop = () => { };
         }
         document.addEventListener('DOMContentLoaded', async () => {
-            // カード向き制御システムをインポート
-            const { CardOrientationManager } = await import('/src/js/card-orientation.js');
-            
             // 手札カードのクリック処理とアクティブ化
             function setupHandCardInteraction() {
                 const handContainer = document.getElementById('player-hand-container');
                 const handSlots = document.querySelectorAll('#player-hand .hand-slot');
-                
+
                 // 手札カードクリック処理
                 handSlots.forEach(slot => {
                     slot.addEventListener('click', (e) => {
@@ -2853,7 +4328,7 @@
                         slot.classList.add('active');
                     });
                 });
-                
+
                 // コンテナ空白部分のクリック透過処理
                 handContainer.addEventListener('click', (e) => {
                     // 空白部分のクリックは下の要素に透過
@@ -2865,7 +4340,7 @@
                     }
                 });
             }
-            
+
             const gameBoard = document.getElementById('game-board');
             const bgImage = document.querySelector('.board-bg');
             const playerBoards = {
@@ -2940,7 +4415,7 @@
             const stadium = find('stadium');
             if (stadium) coordsShared['stadium-zone'] = rectFrom(stadium);
 
-            function buildCoordsCSS(map, scopeSelector){
+            function buildCoordsCSS(map, scopeSelector) {
                 if (!map) return '';
                 const DEBUG_MODE = true;
                 const PLAYMAT_WIDTH = (imgSize && imgSize.width) ? imgSize.width : 679;
@@ -2955,11 +4430,11 @@
                     if (coords.width < 10 || coords.height < 10) {
                         console.warn(`⚠️ Suspiciously small size for ${key}: ${coords.width.toFixed(1)}x${coords.height.toFixed(1)}`);
                     }
-                    transformedCoords.push({key, leftPct, topPct, widthPct, heightPct});
+                    transformedCoords.push({ key, leftPct, topPct, widthPct, heightPct });
                     // Determine z-index based on scope
-                    const zIndex = scopeSelector.includes('player-self') ? 'var(--z-board)' : 
-                                  scopeSelector.includes('opponent-board') ? 'var(--z-board)' : 
-                                  'var(--z-placeholder)';
+                    const zIndex = scopeSelector.includes('player-self') ? 'var(--z-board)' :
+                        scopeSelector.includes('opponent-board') ? 'var(--z-board)' :
+                            'var(--z-placeholder)';
                     css += `${scopeSelector} .${key}{position:absolute!important;left:${leftPct}%;top:${topPct}%;width:${widthPct}%;height:${heightPct}%;display:block!important;opacity:1!important;pointer-events:auto!important;cursor:pointer!important;z-index:${zIndex}!important;}
 `;
                     if (key.startsWith('side-left-') || key.startsWith('side-right-')) {
@@ -2982,27 +4457,27 @@
                 if (!deckElement) return;
                 const stack = deckElement.querySelector('.deck-stack');
                 if (!stack) return;
-                
+
                 // Calculate height based on card count (max 60 cards, max 20px height)
                 const maxHeight = 20;
                 const height = Math.min(maxHeight, Math.max(2, cardCount * 0.3));
-                
+
                 // Update the pseudo-elements for stacking effect
                 const before = stack.style;
                 before.setProperty('--deck-height', `${height}px`);
             }
 
-            function updateLayout(){
+            function updateLayout() {
                 // CSS文字列を生成してスタイルタグに適用（完全CSS管理）
                 // インラインstyleのtransform系のみ除去（pointer-eventsは維持）
                 const allSlots = document.querySelectorAll('#game-board .card-slot');
                 allSlots.forEach(el => {
-                    // transformのみリセット、他のstyle属性は保持
-                    el.style.transform = '';
-                    el.style.left = '';
-                    el.style.top = '';
-                    el.style.width = '';
-                    el.style.height = '';
+                    // インラインスタイルを完全に削除してCSSに制御を任せる
+                    el.style.removeProperty('transform');
+                    el.style.removeProperty('left');
+                    el.style.removeProperty('top');
+                    el.style.removeProperty('width');
+                    el.style.removeProperty('height');
                     // pointer-events, z-index等は保持してクリック機能を維持
                 });
 
@@ -3017,26 +4492,13 @@
                     document.head.appendChild(styleTag);
                 }
                 styleTag.textContent = css;
-                
-                // プレースホルダーのカード向きを適用
-                const playerSlots = document.querySelectorAll('#game-board .player-board.player-self .card-slot');
-                const opponentSlots = document.querySelectorAll('#game-board .player-board.opponent-board .card-slot');
-                
-                // プレイヤー側プレースホルダー（正位置）
-                playerSlots.forEach(slot => {
-                    const zone = slot.dataset.zone || slot.className.match(/\b(\w+)-\w+/)?.[1] || 'field';
-                    CardOrientationManager.applyCardOrientation(slot, 'player', zone);
-                });
-                
-                // CPU側プレースホルダー（hand以外は180度回転）
-                opponentSlots.forEach(slot => {
-                    const zone = slot.dataset.zone || slot.className.match(/\b(\w+)-\w+/)?.[1] || 'field';
-                    CardOrientationManager.applyCardOrientation(slot, 'cpu', zone);
-                });
-                
+
+                // 注: プレースホルダーの data-orientation は HTML に直接設定済み
+                // 動的に配置されるカードのみ CardOrientationManager で設定する
+
                 // 手札インタラクション設定
                 setupHandCardInteraction();
-                
+
                 // デッキ高さ更新処理（ゲーム状態連携時に実装）
                 const playerDeck = playerBoards.self?.querySelector('.deck-container');
                 const opponentDeck = playerBoards.opponent?.querySelector('.deck-container');
@@ -3051,7 +4513,7 @@
             // 初期化処理：背景画像とDOMの準備完了を待つ
             function initializeLayout() {
                 // プレイマット初期化
-                
+
                 // RequestAnimationFrameで次の描画フレームを待つ（ベストプラクティス）
                 requestAnimationFrame(() => {
                     updateLayout();
@@ -3072,7 +4534,7 @@
                         noop('📸 Playmat image loaded successfully');
                         initializeLayout();
                     }, { once: true });
-                    
+
                     bgImage.addEventListener('error', () => {
                         console.error('❌ Failed to load playmat image');
                         initializeLayout(); // 画像なしでも配置は実行
@@ -3082,7 +4544,7 @@
                 console.warn('⚠️ Background image element not found');
                 initializeLayout();
             }
-            
+
             // リサイズ時の処理（デバウンス付き）
             let resizeTimeout;
             window.addEventListener('resize', () => {
@@ -3092,7 +4554,7 @@
                     updateLayout();
                 }, 100);
             });
-            
+
             // カードエディタボタンのイベントハンドラ
             const cardEditorButton = document.getElementById('card-editor-button-float');
             if (cardEditorButton) {
@@ -3101,16 +4563,12 @@
                 });
             }
 
-            // 固定Z位置の適用（スライダー削除に伴い定数化）
-            if (gameBoard) {
-                const initialZ = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tz-game-board')) || -380;
-                document.documentElement.style.setProperty('--tz-game-board', `${initialZ}px`);
-            }
+            // 3D設定はThree.js (scene.js) で管理、CSS変数は不要
         });
 
         // ================= Debug helpers =================
         /* Debug helpers removed */
-        function getStyles(el){
+        function getStyles(el) {
             const cs = window.getComputedStyle(el);
             return {
                 position: cs.position,
@@ -3131,13 +4589,14 @@
         // Debug helpers removed
     </script>
     <!-- Action Modal -->
-    <div id="action-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center" style="z-index: var(--z-modals);"></div>
+    <div id="action-modal" class="hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center"
+        style="z-index: var(--z-modals);"></div>
 
     <script type="module">
         // Modal Manager の初期化
         try {
             const { modalManager } = await import('/src/js/modal-manager.js');
-            const noop = window.noop || (() => {});
+            const noop = window.noop || (() => { });
 
             // DOM準備完了後にModal Managerを初期化
             if (document.readyState === 'loading') {
@@ -3156,11 +4615,11 @@
     <script type="module">
         // ゲーム初期化のメイン処理
         // main.jsインポート開始
-        
+
         try {
             const module = await import('/src/js/main.js');
             // main.jsインポート成功
-            
+
             // 初期化完了を待機
             if (!window.game) {
                 console.log('⏳ HTML: Waiting for game initialization...');
@@ -3174,16 +4633,16 @@
                     }
                 });
             }
-            
+
         } catch (e) {
             console.error('❌ HTML: Failed to import main.js:', e);
             showInitializationError(e);
         }
-        
+
         // エラー表示機能
         function showInitializationError(error) {
             console.log('🚨 HTML: Showing initialization error to user');
-            
+
             // エラーメッセージを表示するモーダルを作成
             const errorModal = document.createElement('div');
             errorModal.id = 'initialization-error-modal';
@@ -3200,7 +4659,7 @@
                 z-index: var(--z-critical);
                 font-family: system-ui, sans-serif;
             `;
-            
+
             errorModal.innerHTML = `
                 <div style="
                     background: #1a1a1a;
@@ -3248,9 +4707,10 @@
                     ">閉じる</button>
                 </div>
             `;
-            
+
             document.body.appendChild(errorModal);
         }
     </script>
 </body>
+
 </html>

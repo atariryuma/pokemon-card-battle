@@ -23,7 +23,7 @@ export class CardMoveAnimations extends AnimationCore {
      */
     async move(playerId, cardId, transition, options = {}) {
         const [from, to] = transition.split('->');
-        
+
         switch (transition) {
             case 'hand->active':
                 return this.handToActive(playerId, cardId, options);
@@ -46,7 +46,7 @@ export class CardMoveAnimations extends AnimationCore {
     async handToActive(playerId, cardId, options = {}) {
         const sourceElement = findCardElement(playerId, cardId, 'hand');
         const targetElement = findZoneElement(playerId, 'active');
-        
+
         if (!areValidElements(sourceElement, targetElement)) {
             console.warn(`Cannot animate hand to active: playerId=${playerId}, cardId=${cardId}`);
             return;
@@ -63,7 +63,7 @@ export class CardMoveAnimations extends AnimationCore {
         const { benchIndex = 0 } = options;
         const sourceElement = findCardElement(playerId, cardId, 'hand');
         const targetElement = findBenchSlot(playerId, benchIndex);
-        
+
         if (!areValidElements(sourceElement, targetElement)) {
             console.warn(`Cannot animate hand to bench: playerId=${playerId}, cardId=${cardId}, benchIndex=${benchIndex}`);
             return;
@@ -77,7 +77,7 @@ export class CardMoveAnimations extends AnimationCore {
      */
     async activeToDiscard(playerId, cardId, options = {}) {
         const sourceElement = findCardElement(playerId, cardId, 'active');
-        
+
         if (!sourceElement) {
             console.warn(`Cannot animate active to discard: playerId=${playerId}, cardId=${cardId}`);
             return;
@@ -94,7 +94,7 @@ export class CardMoveAnimations extends AnimationCore {
         const { benchIndex = 0 } = options;
         const sourceElement = findBenchSlot(playerId, benchIndex);
         const targetElement = findZoneElement(playerId, 'active');
-        
+
         if (!sourceElement || !targetElement) return;
 
         await this.animate(sourceElement, 'anim-card-promote', ANIMATION_TIMING.normal);
@@ -106,7 +106,7 @@ export class CardMoveAnimations extends AnimationCore {
     async deckToHand(playerId, cardId, options = {}) {
         const deckElement = findZoneElement(playerId, 'deck');
         const handElement = findZoneElement(playerId, 'hand');
-        
+
         if (!deckElement || !handElement) return;
 
         // デッキリフト → 手札スライド
@@ -120,7 +120,7 @@ export class CardMoveAnimations extends AnimationCore {
      */
     async genericMove(playerId, cardId, from, to, options = {}) {
         const sourceElement = findCardElement(playerId, cardId, from);
-        
+
         if (!sourceElement) return;
 
         await this.animate(sourceElement, 'anim-card-move', ANIMATION_TIMING.normal);
@@ -138,7 +138,7 @@ export class CardMoveAnimations extends AnimationCore {
                 }, index * staggerDelay);
             });
         });
-        
+
         await Promise.all(promises);
     }
 
@@ -147,7 +147,7 @@ export class CardMoveAnimations extends AnimationCore {
      */
     async dealHand(cards, playerId, options = {}) {
         const { staggerDelay = 80 } = options;
-        
+
         if (!Array.isArray(cards)) {
             console.warn('dealHand: cards should be an array');
             return;
@@ -169,13 +169,13 @@ export class CardMoveAnimations extends AnimationCore {
                         // カードを最初は非表示にして
                         cardElement.style.opacity = '0';
                         cardElement.style.transform = 'translateY(-30px) scale(0.8)';
-                        
+
                         // フェードインアニメーション
                         await this.delay(50);
                         cardElement.style.transition = 'opacity 300ms ease, transform 300ms ease';
                         cardElement.style.opacity = '1';
                         cardElement.style.transform = 'translateY(0) scale(1)';
-                        
+
                         // 配布効果音の代わりに軽い振動
                         if (navigator.vibrate) {
                             navigator.vibrate(50);
@@ -207,8 +207,7 @@ export class CardMoveAnimations extends AnimationCore {
                 setTimeout(async () => {
                     const target = el; // そのまま使用（子要素やslot自体に対応）
                     if (target) {
-                        // 向きを適用（CPU/プレイヤー、ゾーン=prize）
-                        CardOrientationManager.applyCardOrientation(target, playerId, 'prize');
+                        // 注: 向き制御は親スロットの data-orientation を CSS が継承
 
                         // 既存の移動系スタイルをクリア（座標ズレ防止）
                         target.style.transition = '';
@@ -235,10 +234,10 @@ export class CardMoveAnimations extends AnimationCore {
      */
     async drawCardFromDeck(playerId, cardElement, options = {}) {
         const { duration = 600 } = options;
-        
+
         const deckElement = findZoneElement(playerId, 'deck');
         const handElement = findZoneElement(playerId, 'hand');
-        
+
         if (!deckElement || !handElement || !cardElement) {
             console.warn('Missing elements for card draw animation');
             return;
@@ -286,11 +285,11 @@ export class CardMoveAnimations extends AnimationCore {
                 if (animCard.parentNode) {
                     animCard.parentNode.removeChild(animCard);
                 }
-                
+
                 // 元のカードを表示
                 cardElement.style.opacity = '1';
                 cardElement.style.transform = 'scale(1.1)';
-                
+
                 // 配置完了効果
                 setTimeout(() => {
                     cardElement.style.transition = 'transform 200ms ease';
@@ -313,10 +312,10 @@ export class CardMoveAnimations extends AnimationCore {
         if (!element) return;
 
         const { imageUrl } = options;
-        
+
         // フリップアニメーション実行
         await this.animate(element, 'anim-card-flip', ANIMATION_TIMING.normal);
-        
+
         // 画像切り替え（指定された場合）
         if (imageUrl) {
             const img = element.querySelector('img');

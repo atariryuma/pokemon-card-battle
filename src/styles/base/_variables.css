@@ -1,0 +1,17 @@
+/**
+ * CSS変数定義 - 新規追加のみ
+ * 
+ * 注: 既存の変数は index.html の :root で定義済み
+ * このファイルは新しいモジュールCSS用の追加変数のみ
+ */
+
+:root {
+   /* イベント委譲用追加変数（既存に追加） */
+   --color-hover-glow: rgba(255, 215, 0, 0.5);
+   --color-slot-bg: rgba(0, 0, 0, 0.3);
+   --color-slot-border: rgba(255, 255, 255, 0.2);
+
+   /* トランジション */
+   --transition-fast: 200ms ease;
+   --transition-normal: 300ms ease;
+}

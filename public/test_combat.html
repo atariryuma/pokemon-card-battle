@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combat Animation Test</title>
+    <link rel="stylesheet" href="/src/styles/z-index-vars.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --anim-fast: 200ms;
+            --anim-normal: 400ms;
+            --anim-slow: 800ms;
+            --anim-combat: 600ms;
+            --anim-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+            --shake-intensity: 1;
+        }
+
+        body {
+            background: #1a1a2e;
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            padding: 20px;
+        }
+
+        .battle-stage {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 100px;
+            margin: 50px auto;
+            perspective: 1000px;
+        }
+
+        .pokemon-card {
+            width: 120px;
+            height: 168px;
+            background: #333;
+            border-radius: 8px;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #555;
+            cursor: pointer;
+        }
+
+        .pokemon-card.attacker {
+            border-color: #fca5a5;
+        }
+
+        .pokemon-card.defender {
+            border-color: #93c5fd;
+        }
+
+        .pokemon-card img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+
+        .hp-display {
+            position: absolute;
+            bottom: -25px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-weight: bold;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 4px;
+        }
+
+        .controls {
+            max-width: 800px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        button {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        /* --- Animations Extracted from index.html & core.js --- */
+
+        /* 1. Attack Movement */
+        .anim-attack-forward {
+            animation: attackForward var(--anim-combat) ease-out;
+        }
+
+        @keyframes attackForward {
+            0% {
+                transform: translateX(0) scale(1);
+            }
+
+            50% {
+                transform: translateX(30px) scale(1.1);
+            }
+
+            100% {
+                transform: translateX(0) scale(1);
+            }
+        }
+
+        /* 2. Damage Shake */
+        .anim-damage-shake {
+            animation: damageShake var(--anim-combat) ease-in-out;
+        }
+
+        @keyframes damageShake {
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            25% {
+                transform: translateX(calc(-5px * var(--shake-intensity)));
+            }
+
+            75% {
+                transform: translateX(calc(5px * var(--shake-intensity)));
+            }
+        }
+
+        /* 3. Knockout */
+        .anim-knockout {
+            animation: knockout 1s ease-in forwards;
+        }
+
+        @keyframes knockout {
+            0% {
+                transform: rotate(0deg) scale(1);
+                opacity: 1;
+            }
+
+            100% {
+                transform: rotate(360deg) scale(0);
+                opacity: 0;
+            }
+        }
+
+        /* 4. Type Effects */
+        .anim-type-fire {
+            animation: typeFire 0.6s ease-out;
+        }
+
+        @keyframes typeFire {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(255, 68, 68, 0);
+                filter: brightness(1);
+            }
+
+            50% {
+                box-shadow: 0 0 40px rgba(255, 68, 68, 0.8);
+                filter: brightness(1.3) sepia(0.5) hue-rotate(-20deg);
+            }
+        }
+
+        .anim-type-water {
+            animation: typeWater 0.6s ease-out;
+        }
+
+        @keyframes typeWater {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(66, 133, 244, 0);
+            }
+
+            50% {
+                box-shadow: 0 0 40px rgba(66, 133, 244, 0.8);
+                filter: brightness(1.2) hue-rotate(10deg);
+            }
+        }
+
+        .anim-type-grass {
+            animation: typeGrass 0.6s ease-out;
+        }
+
+        @keyframes typeGrass {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(76, 175, 80, 0);
+            }
+
+            50% {
+                box-shadow: 0 0 40px rgba(76, 175, 80, 0.8);
+                filter: brightness(1.2) hue-rotate(40deg);
+            }
+        }
+
+        .anim-type-lightning {
+            animation: typeLightning 0.6s ease-out;
+        }
+
+        @keyframes typeLightning {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(255, 235, 59, 0);
+                filter: brightness(1);
+            }
+
+            25% {
+                filter: brightness(2);
+            }
+
+            50% {
+                box-shadow: 0 0 50px rgba(255, 235, 59, 0.9);
+                filter: brightness(1.5);
+            }
+
+            75% {
+                filter: brightness(2);
+            }
+        }
+
+        .anim-type-psychic {
+            animation: typePsychic 0.6s ease-out;
+        }
+
+        @keyframes typePsychic {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 rgba(156, 39, 176, 0);
+            }
+
+            50% {
+                box-shadow: 0 0 40px rgba(156, 39, 176, 0.8);
+                filter: hue-rotate(45deg);
+            }
+        }
+
+        .anim-type-fighting {
+            animation: typeFighting 0.6s ease-out;
+        }
+
+        @keyframes typeFighting {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(0.9);
+                box-shadow: inset 0 0 30px rgba(255, 87, 34, 0.8);
+            }
+        }
+
+        .anim-type-darkness {
+            animation: typeDarkness 0.6s ease-out;
+        }
+
+        @keyframes typeDarkness {
+
+            0%,
+            100% {
+                filter: brightness(1);
+            }
+
+            50% {
+                filter: brightness(0.3) grayscale(1);
+                box-shadow: 0 0 30px #000;
+            }
+        }
+
+        .anim-type-metal {
+            animation: typeMetal 0.6s ease-out;
+        }
+
+        @keyframes typeMetal {
+
+            0%,
+            100% {
+                filter: brightness(1);
+            }
+
+            50% {
+                filter: brightness(1.5) grayscale(1);
+                box-shadow: 0 0 20px #b0bec5;
+            }
+        }
+
+        /* 5. Special Conditions */
+        .anim-condition-poison {
+            animation: conditionPoison 2s infinite;
+        }
+
+        @keyframes conditionPoison {
+
+            0%,
+            100% {
+                filter: hue-rotate(0deg);
+            }
+
+            50% {
+                filter: hue-rotate(270deg) brightness(0.8);
+            }
+        }
+
+        .anim-condition-burn {
+            animation: conditionBurn 1.5s infinite;
+        }
+
+        @keyframes conditionBurn {
+
+            0%,
+            100% {
+                filter: sepia(0);
+            }
+
+            50% {
+                filter: sepia(1) hue-rotate(-30deg) saturate(3);
+            }
+        }
+
+        .anim-screen-shake {
+            animation: screenShake 0.4s ease-in-out;
+        }
+
+        @keyframes screenShake {
+
+            0%,
+            100% {
+                transform: translate(0, 0);
+            }
+
+            25% {
+                transform: translate(-2px, 2px);
+            }
+
+            75% {
+                transform: translate(2px, -2px);
+            }
+        }
+
+        .anim-screen-flash {
+            animation: screenFlash 0.2s ease-out;
+        }
+
+        @keyframes screenFlash {
+
+            0%,
+            100% {
+                opacity: 0;
+            }
+
+            50% {
+                background: white;
+                opacity: 0.3;
+            }
+        }
+
+        /* Helper to flash overlay */
+        #flash-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9999;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="flash-overlay"></div>
+
+    <div class="max-w-4xl mx-auto text-center mb-8">
+        <h1 class="text-3xl font-bold text-yellow-400 mb-2">Combat Animation Test</h1>
+        <p class="text-gray-400">Verifying animation classes and JS integration</p>
+    </div>
+
+    <div class="battle-stage" id="game-board">
+        <!-- Attacker -->
+        <div class="text-center">
+            <p class="mb-2 text-red-300 font-bold">Attacker</p>
+            <div id="attacker" class="pokemon-card attacker" data-id="attacker-1">
+                <div class="text-xs text-gray-400">Charizard</div>
+                <!-- Placeholder for image -->
+            </div>
+        </div>
+
+        <!-- Defender -->
+        <div class="text-center">
+            <p class="mb-2 text-blue-300 font-bold">Defender</p>
+            <div id="defender" class="pokemon-card defender" data-id="defender-1">
+                <div class="text-xs text-gray-400">Blastoise</div>
+                <div class="hp-display">100 / 100</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <!-- Attacks -->
+        <button class="bg-red-600 hover:bg-red-500" onclick="testAttack('fire')">Fire Attack</button>
+        <button class="bg-blue-600 hover:bg-blue-500" onclick="testAttack('water')">Water Attack</button>
+        <button class="bg-green-600 hover:bg-green-500" onclick="testAttack('grass')">Grass Attack</button>
+        <button class="bg-yellow-500 text-black hover:bg-yellow-400"
+            onclick="testAttack('lightning')">Lightning</button>
+        <button class="bg-purple-600 hover:bg-purple-500" onclick="testAttack('psychic')">Psychic</button>
+        <button class="bg-orange-600 hover:bg-orange-500" onclick="testAttack('fighting')">Fighting</button>
+        <button class="bg-gray-700 hover:bg-gray-600" onclick="testAttack('darkness')">Darkness</button>
+        <button class="bg-gray-400 text-black hover:bg-gray-300" onclick="testAttack('metal')">Metal</button>
+
+        <!-- Actions -->
+        <div class="col-span-full h-px bg-gray-700 my-2"></div>
+
+        <button class="bg-red-800 hover:bg-red-700" onclick="testDamage(20)">Small Dmg (20)</button>
+        <button class="bg-red-900 hover:bg-red-800" onclick="testDamage(100)">Big Dmg (100)</button>
+        <button class="bg-black border border-red-500" onclick="testKnockout()">KO Animation</button>
+        <button class="bg-gray-600" onclick="reset()">Reset</button>
+
+        <!-- Conditions -->
+        <div class="col-span-full h-px bg-gray-700 my-2"></div>
+
+        <button class="bg-purple-900" onclick="toggleCondition('poisoned')">Poison</button>
+        <button class="bg-orange-900" onclick="toggleCondition('burned')">Burn</button>
+    </div>
+
+    <script type="module">
+        import { CombatAnimations } from '/src/js/animations/combat.js';
+
+        // Mock AnimationCore dependencies if needed, but we imported the real one.
+        // We need to ensure the DOM elements match what the class expects (data-cards, etc.)
+        // But the class accepts IDs and looks them up.
+
+        // Mock document.querySelector for specific ID patterns if the class is strict?
+        // CombatAnimations uses _findPokemonElement which looks for [data-pokemon-id], etc.
+        // Our HTML has data-id="defender-1", let's make it match.
+        document.getElementById('attacker').setAttribute('data-pokemon-id', 'attacker-1');
+        document.getElementById('defender').setAttribute('data-pokemon-id', 'defender-1');
+
+        const combat = new CombatAnimations();
+
+        // Global functions for buttons
+        window.testAttack = async (type) => {
+            console.log(`Testing ${type} attack...`);
+            try {
+                await combat.attack(type, 10, 'defender-1', { attackerId: 'attacker-1' });
+            } catch (e) {
+                console.error(e);
+                alert('Error: ' + e.message);
+            }
+        };
+
+        window.testDamage = async (amount) => {
+            console.log(`Testing damage: ${amount}`);
+            try {
+                await combat.damage(amount, 'defender-1');
+            } catch (e) {
+                console.error(e);
+            }
+        };
+
+        window.testKnockout = async () => {
+            console.log('Testing Knockout');
+            try {
+                await combat.knockout('defender-1');
+            } catch (e) {
+                console.error(e);
+            }
+        };
+
+        window.toggleCondition = async (condition) => {
+            const el = document.getElementById('defender');
+            // Toggle manually for test since combat.js might not have toggle logic exposed simply
+            await combat.specialCondition(condition, 'defender-1');
+        };
+
+        window.reset = () => {
+            const def = document.getElementById('defender');
+            def.style = '';
+            def.className = 'pokemon-card defender';
+            def.querySelector('.hp-display').style = '';
+
+            const att = document.getElementById('attacker');
+            att.style = '';
+            att.className = 'pokemon-card attacker';
+        };
+
+        console.log('Combat Test Loaded');
+    </script>
+</body>
+
+</html>

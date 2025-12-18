@@ -214,8 +214,11 @@ export class CombatAnimations extends AnimationCore {
          */
         this._errorLog = [];
 
-        // CSS依存性を検証（開発環境のみ）
-        if (process?.env?.NODE_ENV !== 'production') {
+        // CSS依存性を検証（開発環境のみ - ブラウザ互換）
+        const isDevEnv = typeof window !== 'undefined' &&
+            (window.location?.hostname === 'localhost' ||
+                window.location?.hostname === '127.0.0.1');
+        if (isDevEnv) {
             this._validateCSSAnimations();
         }
     }
@@ -749,8 +752,8 @@ export class CombatAnimations extends AnimationCore {
     _findPokemonElement(pokemonId) {
         // runtimeId 優先で特定し、互換で master id / data-pokemon-id も探索
         return document.querySelector(`[data-runtime-id="${pokemonId}"]`) ||
-               document.querySelector(`[data-card-id="${pokemonId}"]`) ||
-               document.querySelector(`[data-pokemon-id="${pokemonId}"]`);
+            document.querySelector(`[data-card-id="${pokemonId}"]`) ||
+            document.querySelector(`[data-pokemon-id="${pokemonId}"]`);
     }
 
     /**
@@ -938,12 +941,12 @@ export class CombatAnimations extends AnimationCore {
      */
     _validateCSSAnimations() {
         const requiredAnimations = [
-            'anim-attack-forward',
-            'anim-damage-shake',
-            'anim-knockout',
-            'anim-screen-shake',
-            'anim-screen-flash',
-            'anim-hp-flash'
+            'attackForward',
+            'damageShake',
+            'knockout',
+            'screenShake',
+            'screenFlash',
+            'hpFlash'
         ];
 
         const missingAnimations = requiredAnimations.filter(anim => {
@@ -973,7 +976,7 @@ export class CombatAnimations extends AnimationCore {
                 const rules = Array.from(sheet.cssRules || []);
                 const hasAnimation = rules.some(rule => {
                     return rule instanceof CSSKeyframesRule &&
-                           rule.name === animationName;
+                        rule.name === animationName;
                 });
                 if (hasAnimation) return true;
             } catch (e) {

@@ -11,6 +11,7 @@ import { EffectAnimations } from './animations/effects.js';
 import { UIAnimations } from './animations/ui.js';
 import { getCardImagePath } from './data-manager.js';
 import { areValidElements } from './dom-utils.js';
+import { threeViewBridge } from './three-view-bridge.js';
 
 /**
  * 統合アニメーションマネージャー
@@ -29,6 +30,14 @@ class AnimationManager {
             quality: 'high', // 'low', 'medium', 'high'
             reduceMotion: this.detectReduceMotion()
         };
+    }
+
+    /**
+     * Three.js 3Dビューが有効かどうか
+     * @returns {boolean}
+     */
+    isThreeJSActive() {
+        return threeViewBridge?.isActive() ?? false;
     }
 
     /**
@@ -191,8 +200,13 @@ class AnimationManager {
     
     /**
      * カード移動（統一API）
+     * Three.js有効時はDOM版アニメーションをスキップ（3Dレンダリングで更新）
      */
     async cardMove(playerId, cardId, transition, options = {}) {
+        // Three.js有効時はDOMアニメーションをスキップ
+        if (this.isThreeJSActive()) {
+            return Promise.resolve();
+        }
         return this.execute(() => this.card.move(playerId, cardId, transition, options));
     }
     

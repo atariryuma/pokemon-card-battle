@@ -1,0 +1,14 @@
+/**
+ * リセットCSS - 最小限のブラウザ正規化
+ * 
+ * 注: body のスタイルは index.html で定義済み
+ * このファイルは user-select 防止のみ追加
+ */
+
+/* ゲーム中のテキスト選択を防止（追加のみ） */
+body {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+}

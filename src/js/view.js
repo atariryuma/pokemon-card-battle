@@ -8,6 +8,8 @@ import { modalManager } from './modal-manager.js';
 import { ToastMessenger } from './toast-messages.js';
 import { gameLogger } from './game-logger.js';
 import { noop, EventListenerManager } from './utils.js';
+import { BoardEventHandler } from './view/board-event-handler.js';
+import { threeViewBridge } from './three-view-bridge.js';
 
 // Z-index定数 (CSS変数と連携) - 最小限に削減
 import { LEGACY_Z_INDEX as Z_INDEX, ZIndexManager } from './z-index-constants.js';
@@ -34,22 +36,26 @@ export class View {
             cpuActive: { dirty: true },
             playerBench: { dirty: true },
             cpuBench: { dirty: true },
+            playerPrize: { dirty: true },
+            cpuPrize: { dirty: true },
+            playerDeck: { dirty: true },
+            cpuDeck: { dirty: true },
             stadium: { dirty: true },
             ui: { dirty: true }
         };
-        
-        
+
+
 
         // Hand containers
         this.playerHand = document.getElementById('player-hand');
         this.cpuHand = document.getElementById('cpu-hand');
-        
+
         // CPU手札を更新（プレイマット統合済み）
         this.cpuHand = document.getElementById('cpu-hand');
         if (this.cpuHand) {
             this.cpuHand.classList.add('cpu-hand-scaling');
         }
-        
+
         // イベントハンドラーを保存（メモリリーク対策）
         this._handClickHandler = this._handleHandClickDelegation.bind(this);
         this._handMouseEnterHandler = (e) => gameLogger.logHoverEvent(e.target, true);
@@ -64,57 +70,30 @@ export class View {
         } else {
             gameLogger.logGameEvent('ERROR', 'プレイヤー手札要素が見つかりません');
         }
-        
-        // プレイマットのクリック・ホバー判定
+
+        // プレイマットのイベント委譲システム（3D対応 - game-stageでキャプチャ）
+        const gameStage = document.getElementById('game-stage');
         const gameBoard = document.getElementById('game-board');
-        if (gameBoard) {
-            this._boardClickHandler = (e) => gameLogger.logClickEvent(e.target);
-            this._boardMouseEnterHandler = (e) => gameLogger.logHoverEvent(e.target, true);
-            this._boardMouseLeaveHandler = (e) => gameLogger.logHoverEvent(e.target, false);
+        const eventTarget = gameStage || gameBoard; // 3D transform の外でキャプチャ
 
-            this.eventListenerManager.add(gameBoard, 'click', this._boardClickHandler);
-            this.eventListenerManager.add(gameBoard, 'mouseenter', this._boardMouseEnterHandler);
-            this.eventListenerManager.add(gameBoard, 'mouseleave', this._boardMouseLeaveHandler);
-        }
-        
-        // 相手フィールドの個別イベントリスナー追加
-        const opponentBoard = document.querySelector('.opponent-board');
-        const cpuBoard = document.getElementById('cpu-board');
+        if (eventTarget) {
+            // BoardEventHandler で全イベントを委譲処理
+            this.boardEventHandler = new BoardEventHandler(eventTarget, (clickInfo, slot, event) => {
+                // ログ出力
+                gameLogger.logClickEvent(slot, `${clickInfo.zone} - ${clickInfo.owner}`);
 
-        if (opponentBoard) {
-            this._opponentClickHandler = (e) => {
-                e.stopPropagation();
-                gameLogger.logClickEvent(e.target, '相手フィールドクリック');
-            };
-            this._opponentMouseEnterHandler = (e) => {
-                gameLogger.logHoverEvent(e.target, true);
-            };
-            this._opponentMouseLeaveHandler = (e) => {
-                gameLogger.logHoverEvent(e.target, false);
-            };
-
-            this.eventListenerManager.add(opponentBoard, 'click', this._opponentClickHandler);
-            this.eventListenerManager.add(opponentBoard, 'mouseenter', this._opponentMouseEnterHandler);
-            this.eventListenerManager.add(opponentBoard, 'mouseleave', this._opponentMouseLeaveHandler);
-            gameLogger.logGameEvent('INFO', '相手フィールドのクリック・ホバー判定を有効化');
-        }
-
-        if (cpuBoard && cpuBoard !== opponentBoard) {
-            this._cpuBoardClickHandler = (e) => {
-                e.stopPropagation();
-                gameLogger.logClickEvent(e.target, 'CPUボードクリック');
-            };
-            this._cpuBoardMouseEnterHandler = (e) => {
-                gameLogger.logHoverEvent(e.target, true);
-            };
-            this._cpuBoardMouseLeaveHandler = (e) => {
-                gameLogger.logHoverEvent(e.target, false);
-            };
-
-            this.eventListenerManager.add(cpuBoard, 'click', this._cpuBoardClickHandler);
-            this.eventListenerManager.add(cpuBoard, 'mouseenter', this._cpuBoardMouseEnterHandler);
-            this.eventListenerManager.add(cpuBoard, 'mouseleave', this._cpuBoardMouseLeaveHandler);
-            gameLogger.logGameEvent('INFO', 'CPUボードのクリック・ホバー判定を有効化');
+                // cardClickHandler に委譲（zone を小文字に正規化）
+                if (this.cardClickHandler) {
+                    this.cardClickHandler({
+                        owner: clickInfo.owner,
+                        zone: clickInfo.zone.toLowerCase(), // game.js は小文字を期待
+                        index: clickInfo.index,
+                        cardId: clickInfo.runtimeId || clickInfo.cardId,
+                        runtimeId: clickInfo.runtimeId
+                    });
+                }
+            });
+            gameLogger.logGameEvent('INFO', `BoardEventHandler によるイベント委譲を有効化 (${eventTarget.id})`);
         }
 
         // レイヤー競合の解決: CPU手札と相手フィールドのz-index関係を検証
@@ -144,15 +123,19 @@ export class View {
         this.currentPlayer = document.getElementById('current-player');
         // confirmSetupButton は getter で管理されているため、ここでは設定しない
         this.initialPokemonSelectionUI = document.getElementById('initial-pokemon-selection');
-        
+
         // Setup Progress Elements
         this.activeStatus = document.getElementById('active-status');
         this.benchStatus = document.getElementById('bench-status');
         this.benchCount = document.getElementById('bench-count');
         this.setupProgress = document.getElementById('setup-progress');
-        
+
         // Message system
         this.toastMessenger = new ToastMessenger(modalManager);
+
+        // Three.js 3D View Bridge
+        this.threeViewBridge = threeViewBridge;
+        this.use3DView = true;  // Three.js を使用するかどうか
 
         // Initialize Mac Dock–style magnification for player's hand (delayed)
         // HoverManagerと統合してz-index管理を最適化
@@ -164,6 +147,33 @@ export class View {
             // グローバルデバッグ関数として公開
             window.debugHandZIndex = () => this.debugHandZIndexIssue();
         }, 1000);
+    }
+
+    /**
+     * Three.js 3Dビューを初期化
+     * @param {Object} playmatSlotsData - プレイマット座標データ
+     */
+    async initThreeJS(playmatSlotsData) {
+        if (!this.use3DView) {
+            gameLogger.logGameEvent('INFO', 'Three.js 3D View is disabled');
+            return false;
+        }
+
+        try {
+            const success = await this.threeViewBridge.init(playmatSlotsData);
+            if (success) {
+                // クリックハンドラをThree.jsにも設定
+                if (this.cardClickHandler) {
+                    this.threeViewBridge.bindCardClick(this.cardClickHandler);
+                }
+                gameLogger.logGameEvent('INFO', '🎮 Three.js 3D View initialized');
+            }
+            return success;
+        } catch (error) {
+            console.error('❌ Three.js init failed:', error);
+            this.use3DView = false;
+            return false;
+        }
     }
 
     /**
@@ -315,10 +325,19 @@ export class View {
     }
 
     /**
-     * ドラッグ&ドロップハンドラーをバインド
+     * ドラッグ&ドロップハンドラーをバインド（DOM版）
      */
     bindDragAndDrop(handler) {
         this.dragDropHandler = handler;
+    }
+
+    /**
+     * Three.js用ドラッグ&ドロップハンドラーをバインド
+     */
+    bindThreeJSDragDrop(handler) {
+        if (this.threeViewBridge) {
+            this.threeViewBridge.bindDragDrop(handler);
+        }
     }
 
     // All messages will now go through showGameMessage or showErrorMessage
@@ -336,20 +355,22 @@ export class View {
     render(state) {
         // 差分レンダリング：変更があった領域のみを更新
         this._detectChanges(state);
-        
+
         // 変更のあった領域のみクリア・レンダリング
-        if (this.renderRegions.playerHand.dirty || this.renderRegions.cpuHand.dirty || 
+        if (this.renderRegions.playerHand.dirty || this.renderRegions.cpuHand.dirty ||
             this.renderRegions.playerActive.dirty || this.renderRegions.cpuActive.dirty ||
-            this.renderRegions.playerBench.dirty || this.renderRegions.cpuBench.dirty) {
-            
+            this.renderRegions.playerBench.dirty || this.renderRegions.cpuBench.dirty ||
+            this.renderRegions.playerPrize.dirty || this.renderRegions.cpuPrize.dirty ||
+            this.renderRegions.playerDeck.dirty || this.renderRegions.cpuDeck.dirty) {
+
             this._performRegionalRender(state);
         }
-        
+
         if (this.renderRegions.stadium.dirty) {
             this._renderStadium(state);
             this.renderRegions.stadium.dirty = false;
         }
-        
+
         if (this.renderRegions.ui.dirty) {
             this._updatePrizeStatus(state);
             this._updateUIElements();
@@ -357,56 +378,71 @@ export class View {
         }
 
         this.lastRenderedState = this._cloneStateForCache(state);
+
+        // Three.js 3Dビューにも状態を反映
+        if (this.use3DView && this.threeViewBridge.isActive()) {
+            this.threeViewBridge.render(state).catch(err => {
+                console.warn('Three.js render warning:', err);
+            });
+        }
     }
-    
+
     _detectChanges(state) {
         if (!this.lastRenderedState) {
             this._markAllRegionsDirty();
             return;
         }
-        
+
         const prev = this.lastRenderedState;
-        
+
         // 手札の変更チェック
         this.renderRegions.playerHand.dirty = this._hasHandChanged(prev.players.player.hand, state.players.player.hand);
         this.renderRegions.cpuHand.dirty = this._hasHandChanged(prev.players.cpu.hand, state.players.cpu.hand);
-        
+
         // アクティブポケモンの変更チェック
         this.renderRegions.playerActive.dirty = this._hasActiveChanged(prev.players.player.active, state.players.player.active);
         this.renderRegions.cpuActive.dirty = this._hasActiveChanged(prev.players.cpu.active, state.players.cpu.active);
-        
+
         // ベンチの変更チェック
         this.renderRegions.playerBench.dirty = this._hasBenchChanged(prev.players.player.bench, state.players.player.bench);
         this.renderRegions.cpuBench.dirty = this._hasBenchChanged(prev.players.cpu.bench, state.players.cpu.bench);
-        
+
+        // サイドカードの変更チェック
+        this.renderRegions.playerPrize.dirty = this._hasPrizeChanged(prev.players.player.prize, state.players.player.prize);
+        this.renderRegions.cpuPrize.dirty = this._hasPrizeChanged(prev.players.cpu.prize, state.players.cpu.prize);
+
+        // デッキの変更チェック
+        this.renderRegions.playerDeck.dirty = this._hasDeckChanged(prev.players.player.deck, state.players.player.deck);
+        this.renderRegions.cpuDeck.dirty = this._hasDeckChanged(prev.players.cpu.deck, state.players.cpu.deck);
+
         // スタジアムの変更チェック
         this.renderRegions.stadium.dirty = this._hasStadiumChanged(prev.stadium, state.stadium);
-        
+
         // UIの変更チェック
         this.renderRegions.ui.dirty = (prev.phase !== state.phase || prev.turn !== state.turn || prev.turnPlayer !== state.turnPlayer);
     }
-    
+
     _hasHandChanged(prevHand, newHand) {
         if (!prevHand && !newHand) return false;
         if (!prevHand || !newHand) return true;
         if (prevHand.length !== newHand.length) return true;
-        
+
         return prevHand.some((card, i) => card?.id !== newHand[i]?.id);
     }
-    
+
     _hasActiveChanged(prevActive, newActive) {
         if (!prevActive && !newActive) return false;
         if (!prevActive || !newActive) return true;
-        return prevActive.id !== newActive.id || 
-               prevActive.damage !== newActive.damage ||
-               JSON.stringify(prevActive.special_conditions) !== JSON.stringify(newActive.special_conditions);
+        return prevActive.id !== newActive.id ||
+            prevActive.damage !== newActive.damage ||
+            JSON.stringify(prevActive.special_conditions) !== JSON.stringify(newActive.special_conditions);
     }
-    
+
     _hasBenchChanged(prevBench, newBench) {
         if (!prevBench && !newBench) return false;
         if (!prevBench || !newBench) return true;
         if (prevBench.length !== newBench.length) return true;
-        
+
         return prevBench.some((pokemon, i) => {
             const prev = pokemon;
             const curr = newBench[i];
@@ -415,59 +451,111 @@ export class View {
             return prev.id !== curr.id || prev.damage !== curr.damage;
         });
     }
-    
+
     _hasStadiumChanged(prevStadium, newStadium) {
         if (!prevStadium && !newStadium) return false;
         if (!prevStadium || !newStadium) return true;
         return prevStadium.id !== newStadium.id;
     }
-    
+
+    _hasPrizeChanged(prevPrize, newPrize) {
+        if (!prevPrize && !newPrize) return false;
+        if (!prevPrize || !newPrize) return true;
+        if (prevPrize.length !== newPrize.length) return true;
+        return prevPrize.some((card, i) => {
+            const prev = card;
+            const curr = newPrize[i];
+            if (!prev && !curr) return false;
+            if (!prev || !curr) return true;
+            return prev.id !== curr.id;
+        });
+    }
+
+    _hasDeckChanged(prevDeck, newDeck) {
+        if (!prevDeck && !newDeck) return false;
+        if (!prevDeck || !newDeck) return true;
+        // デッキはカード枚数の変化のみチェック（パフォーマンス最適化）
+        return prevDeck.length !== newDeck.length;
+    }
+
     _markAllRegionsDirty() {
         Object.keys(this.renderRegions).forEach(region => {
             this.renderRegions[region].dirty = true;
         });
     }
-    
+
     _performRegionalRender(state) {
         // Debug logs removed for production
-        
-        // 部分的なクリアとレンダリング
-        if (this.renderRegions.playerHand.dirty) {
-            // Player hand rendering...
-            this._clearHandArea(this.playerHand);
-            this._renderHand(this.playerHand, state.players.player.hand, 'player');
-            this.renderRegions.playerHand.dirty = false;
+
+        // Three.js有効時はDOM版をスキップ
+        const use3D = this.use3DView && this.threeViewBridge?.isActive();
+
+        // 部分的なクリアとレンダリング（手札）
+        if (!use3D) {
+            if (this.renderRegions.playerHand.dirty) {
+                this._clearHandArea(this.playerHand);
+                this._renderHand(this.playerHand, state.players.player.hand, 'player');
+                this.renderRegions.playerHand.dirty = false;
+            }
+
+            if (this.renderRegions.cpuHand.dirty) {
+                this._clearHandArea(this.cpuHand);
+                this._renderHand(this.cpuHand, state.players.cpu.hand, 'cpu');
+                this.renderRegions.cpuHand.dirty = false;
+            }
         } else {
-            // Player hand up to date, skipping render
+            // Three.js使用時はDOMをクリアしてdirtyフラグをリセット
+            if (this.renderRegions.playerHand.dirty) {
+                this._clearHandArea(this.playerHand);
+                this.renderRegions.playerHand.dirty = false;
+            }
+            if (this.renderRegions.cpuHand.dirty) {
+                this._clearHandArea(this.cpuHand);
+                this.renderRegions.cpuHand.dirty = false;
+            }
         }
-        
-        if (this.renderRegions.cpuHand.dirty) {
-            this._clearHandArea(this.cpuHand);
-            this._renderHand(this.cpuHand, state.players.cpu.hand, 'cpu');
-            this.renderRegions.cpuHand.dirty = false;
-        }
-        
-        if (this.renderRegions.playerActive.dirty || this.renderRegions.playerBench.dirty) {
+
+        // プレイヤーボード（Active, Bench, Prize, Deck）- Three.js有効時もスキップ
+        if (!use3D && (this.renderRegions.playerActive.dirty || this.renderRegions.playerBench.dirty ||
+            this.renderRegions.playerPrize.dirty || this.renderRegions.playerDeck.dirty)) {
             this._clearBoardArea(this.playerBoard);
             this._renderBoard(this.playerBoard, state.players.player, 'player');
             this.renderRegions.playerActive.dirty = false;
             this.renderRegions.playerBench.dirty = false;
+            this.renderRegions.playerPrize.dirty = false;
+            this.renderRegions.playerDeck.dirty = false;
+        } else if (use3D) {
+            // Three.js使用時はdirtyフラグのみリセット
+            this.renderRegions.playerActive.dirty = false;
+            this.renderRegions.playerBench.dirty = false;
+            this.renderRegions.playerPrize.dirty = false;
+            this.renderRegions.playerDeck.dirty = false;
         }
-        
-        if (this.renderRegions.cpuActive.dirty || this.renderRegions.cpuBench.dirty) {
+
+        // CPUボード（Active, Bench, Prize, Deck）- Three.js有効時もスキップ
+        if (!use3D && (this.renderRegions.cpuActive.dirty || this.renderRegions.cpuBench.dirty ||
+            this.renderRegions.cpuPrize.dirty || this.renderRegions.cpuDeck.dirty)) {
             this._clearBoardArea(this.opponentBoard);
             this._renderBoard(this.opponentBoard, state.players.cpu, 'cpu');
             this.renderRegions.cpuActive.dirty = false;
             this.renderRegions.cpuBench.dirty = false;
+            this.renderRegions.cpuPrize.dirty = false;
+            this.renderRegions.cpuDeck.dirty = false;
+        } else if (use3D) {
+            // Three.js使用時はdirtyフラグのみリセット
+            this.renderRegions.cpuActive.dirty = false;
+            this.renderRegions.cpuBench.dirty = false;
+            this.renderRegions.cpuPrize.dirty = false;
+            this.renderRegions.cpuDeck.dirty = false;
         }
-        
+
         // レイアウトはCSSに委譲（手札位置調整のJS制御は撤廃）
     }
-    
+
     _clearHandArea(handElement) {
         if (handElement) handElement.innerHTML = '';
     }
-    
+
     _clearBoardArea(boardElement) {
         if (!boardElement) return;
         const isCpuBoard = boardElement.classList.contains('opponent-board');
@@ -486,13 +574,13 @@ export class View {
             slot.innerHTML = '';
         });
     }
-    
+
     // _updateHandPosition はCSSレイアウトへ委譲のため撤廃
-    
+
     _updateUIElements() {
         this._debugZOrder();
     }
-    
+
     _cloneStateForCache(state) {
         return {
             phase: state.phase,
@@ -502,26 +590,26 @@ export class View {
             players: {
                 player: {
                     hand: (state.players.player.hand || []).map(c => c ? { id: c.id } : null),
-                    active: state.players.player.active ? { 
-                        id: state.players.player.active.id, 
+                    active: state.players.player.active ? {
+                        id: state.players.player.active.id,
                         damage: state.players.player.active.damage || 0,
                         special_conditions: [...(state.players.player.active.special_conditions || [])]
                     } : null,
-                    bench: (state.players.player.bench || []).map(p => p ? { 
-                        id: p.id, 
-                        damage: p.damage || 0 
+                    bench: (state.players.player.bench || []).map(p => p ? {
+                        id: p.id,
+                        damage: p.damage || 0
                     } : null)
                 },
                 cpu: {
                     hand: (state.players.cpu.hand || []).map(c => c ? { id: c.id } : null),
-                    active: state.players.cpu.active ? { 
-                        id: state.players.cpu.active.id, 
+                    active: state.players.cpu.active ? {
+                        id: state.players.cpu.active.id,
                         damage: state.players.cpu.active.damage || 0,
                         special_conditions: [...(state.players.cpu.active.special_conditions || [])]
                     } : null,
-                    bench: (state.players.cpu.bench || []).map(p => p ? { 
-                        id: p.id, 
-                        damage: p.damage || 0 
+                    bench: (state.players.cpu.bench || []).map(p => p ? {
+                        id: p.id,
+                        damage: p.damage || 0
                     } : null)
                 }
             }
@@ -533,12 +621,12 @@ export class View {
         allSlots.forEach(slot => {
             slot.innerHTML = '';
         });
-        
+
         // Clear hand areas
         if (this.playerHand) this.playerHand.innerHTML = '';
         if (this.cpuHand) this.cpuHand.innerHTML = '';
     }
-    
+
     _renderBoard(boardElement, playerState, playerType) {
         if (!boardElement) return;
 
@@ -599,11 +687,12 @@ export class View {
                 const count = document.createElement('div');
                 count.className = 'absolute bottom-1 right-1 bg-gray-800 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center';
                 ZIndexManager.apply(count, 'CARD_EFFECTS'); // カード付与効果レイヤー
+                // NOTE: CSS 3D (translateZ) は削除、3D表示はThree.jsが担当
                 count.textContent = deckArr.length;
                 deckSlot.appendChild(count);
                 noop(`  🏷️ Added deck count badge: ${deckArr.length} cards`);
             }
-            
+
             // Make the deck clickable for drawing
             if (playerType === 'player' && this.cardClickHandler) {
                 deckSlot.classList.add('cursor-pointer');
@@ -628,13 +717,13 @@ export class View {
             return;
         }
         const arr = Array.isArray(hand) ? hand : [];
-        
+
         // 既存のアクティブ状態をクリア
         this._clearHandActiveStates();
-        
+
         arr.forEach((card, index) => {
             const isFaceDown = playerType === 'cpu';
-            
+
             // プレースホルダーベースの手札スロットを作成
             const handSlot = document.createElement('div');
             handSlot.className = 'hand-slot relative';
@@ -642,10 +731,10 @@ export class View {
             handSlot.dataset.owner = playerType;
             handSlot.dataset.zone = 'hand';
             handSlot.dataset.cardId = card.id;
-            
+
             // カード要素を作成
             const cardEl = this._createCardElement(card, playerType, 'hand', index, isFaceDown);
-            
+
             // プレイヤーとCPUで異なる動的カードサイズを設定
             if (playerType === 'player') {
                 handSlot.classList.add('flex-shrink-0'); // プレイヤーは動的サイズ（CSS変数）
@@ -654,7 +743,7 @@ export class View {
                 handSlot.classList.add('flex-shrink-0'); // CPUも動的サイズ（CSS変数）
                 cardEl.classList.add('w-full', 'h-full');
             }
-            
+
             // 基本的な表示設定のみ（Mac Dock効果は後で追加）
             handSlot.style.visibility = 'visible';
             handSlot.style.display = 'flex';
@@ -666,11 +755,11 @@ export class View {
             // Append後にz-indexを設定し確実に前面表示
             ZIndexManager.setHandNormal(handSlot);
         });
-        
+
         // DOM挿入後の強制再描画
         if (handElement.children.length > 0) {
             handElement.offsetHeight; // Force reflow
-            
+
             if (playerType === 'player') {
                 this._applyHandDockEffect(handElement);
                 this._adjustHandHeight(handElement);
@@ -679,7 +768,7 @@ export class View {
     }
 
 
-    
+
     /**
      * 手札のアクティブ状態をクリア
      */
@@ -701,7 +790,7 @@ export class View {
      */
     _applyHandDockEffect(handElement) {
         if (!handElement) return;
-        
+
         // 手札スロットにhand-cardクラスを追加（プレースホルダーを含む全スロット）
         const handSlots = handElement.querySelectorAll('.hand-slot');
         handSlots.forEach(slot => {
@@ -711,7 +800,7 @@ export class View {
                 slot.classList.add('has-placeholder');
             }
         });
-        
+
         // 手札コンテナにhand-dockクラスを追加
         handElement.classList.add('hand-dock');
     }
@@ -721,18 +810,18 @@ export class View {
      */
     _adjustHandHeight(handElement) {
         if (!handElement) return;
-        
+
         // 基本カードサイズ (w-24 h-32 = 96px x 128px)
         const baseCardHeight = 128;
         // Mac Dock効果の最大スケール（適度な拡大 = 1.4倍）
         const maxScale = 1.4;
         // 最大リフト量（1.4倍拡大に合わせて調整）
         const maxLift = 20;
-        
+
         // 拡大時の最大必要高さを計算
         const maxCardHeight = baseCardHeight * maxScale;
         const requiredHeight = Math.ceil(maxCardHeight + maxLift + 30); // 余白30px
-        
+
         // コンテナの高さを動的に設定（制限なし）
         handElement.style.height = `${requiredHeight}px`;
         handElement.style.minHeight = `${requiredHeight}px`;
@@ -745,7 +834,7 @@ export class View {
     _initHandDock() {
         const container = document.getElementById('player-hand');
         if (!container) return;
-        
+
         // 簡潔な初期化ログ
         const containerStyle = window.getComputedStyle(container);
         // console.log(`🃏 Hand container z-index: ${containerStyle.zIndex}`);  // Debug only
@@ -771,7 +860,7 @@ export class View {
                 el.style.marginLeft = `${BASE_GAP}px`;
                 el.style.marginRight = `${BASE_GAP}px`;
                 ZIndexManager.setHandNormal(el);
-                
+
                 // 最初のカードのみz-index確認
                 if (index === 0 && cards.length > 0) {
                     const zIndex = window.getComputedStyle(el).zIndex;
@@ -780,7 +869,7 @@ export class View {
                     }
                 }
             });
-            
+
             // アニメーションフラグをクリア（必要に応じて）
             if (rafId) {
                 cancelAnimationFrame(rafId);
@@ -850,7 +939,7 @@ export class View {
             }
         }, { passive: true });
         container.addEventListener('mouseleave', resetAll, { passive: true });
-        
+
         // Touch support: tap to center magnify under finger, then reset on end
         container.addEventListener('touchmove', (e) => {
             if (!e.touches || e.touches.length === 0) return;
@@ -860,16 +949,16 @@ export class View {
 
         // ドキュメント全体でのマウス監視（手札エリア外でリセット）
         let isMouseOverHand = false;
-        
+
         container.addEventListener('mouseenter', () => {
             isMouseOverHand = true;
         });
-        
+
         container.addEventListener('mouseleave', () => {
             isMouseOverHand = false;
             resetAll();
         });
-        
+
         // グローバルマウス移動でも確認
         document.addEventListener('mousemove', () => {
             if (!isMouseOverHand) {
@@ -903,7 +992,7 @@ export class View {
     /**
      * Dynamically set #player-hand height to fit the tallest card at max magnification.
      */
-        _updateHandContainerHeight() {
+    _updateHandContainerHeight() {
         // This function is no longer needed as hand height is fixed in CSS.
         // Keeping it as a placeholder comment for now.
     }
@@ -915,13 +1004,13 @@ export class View {
         const playerHand = document.getElementById('player-hand');
         const gameBoard = document.getElementById('game-board');
         const handCards = playerHand ? playerHand.querySelectorAll('.hand-slot') : [];
-        
+
         // CPU手札とプレイマット測定
         if (window.debugSystem) {
             setTimeout(() => window.debugSystem.measureAll(), 500);
         }
     }
-    
+
     /**
      * Dump key Z-order related computed styles for troubleshooting.
      */
@@ -958,27 +1047,26 @@ export class View {
 
     /**
      * サイドカードをレンダリングすべきかどうかを判定
+     * 注: アニメーションの完了状態に関係なく常にレンダリングする
+     *     アニメーション制御はCSSクラスで行う
      */
-    _shouldRenderPrizes(playerType) {
-        // 新方式: 側ごとのアニメ完了フラグで制御
-        const status = window.game?.prizeAnimationStatus;
-        if (!status) return true;
-        if (playerType === 'player') return !!status.player;
-        if (playerType === 'cpu') return !!status.cpu;
+    _shouldRenderPrizes(_playerType) {
+        // アニメーションフラグがなくても、または未完了でもレンダリングする
+        // これによりゲーム開始時からサイドカードが表示される
         return true;
     }
 
     _renderPrizeArea(boardElement, prize, playerType) {
         const prizeContainerSelector = playerType === 'player' ? '.side-left' : '.side-right';
         const prizeContainer = boardElement.querySelector(prizeContainerSelector);
-        
+
         if (!prizeContainer) {
             console.warn(`Prize container not found: ${prizeContainerSelector}`);
             return;
         }
-        
+
         noop(`🏆 Rendering ${prize.length} prize cards for ${playerType} in ${prizeContainerSelector}`);
-        
+
         // 各カードスロットにカードを配置
         const prizeSlots = prizeContainer.querySelectorAll('.card-slot');
         const six = Array.isArray(prize) ? prize.slice(0, 6) : new Array(6).fill(null);
@@ -1017,16 +1105,16 @@ export class View {
     _updatePrizeStatus(state) {
         const playerPrizeElement = document.getElementById('player-prize-count');
         const cpuPrizeElement = document.getElementById('cpu-prize-count');
-        
+
         if (playerPrizeElement && cpuPrizeElement) {
             // プレイヤーのサイド残り枚数（prizeRemainingが正しいカウンター）
             const playerPrizeRemaining = state.players.player.prizeRemaining || 0;
             const playerPrizeTotal = 6; // 固定値
-            
+
             // CPUのサイド残り枚数
             const cpuPrizeRemaining = state.players.cpu.prizeRemaining || 0;
             const cpuPrizeTotal = 6; // 固定値
-            
+
             playerPrizeElement.textContent = `${playerPrizeRemaining}/${playerPrizeTotal}`;
             cpuPrizeElement.textContent = `${cpuPrizeRemaining}/${cpuPrizeTotal}`;
         }
@@ -1044,27 +1132,25 @@ export class View {
             const placeholder = document.createElement('div');
             placeholder.className = 'card-placeholder w-full h-full flex items-center justify-center text-xs text-gray-500';
             placeholder.textContent = 'Stadium Zone';
-            // Stadiumプレースホルダーも向き制御を適用
-            CardOrientationManager.applyCardOrientation(placeholder, 'global', 'stadium');
+            // 注: 向き制御は親スロットの data-orientation を CSS が継承
             stadiumEl.appendChild(placeholder);
         }
     }
 
-        _createCardElement(card, playerType, zone, index, isFaceDown = false) {
+    _createCardElement(card, playerType, zone, index, isFaceDown = false) {
         const container = document.createElement('div');
         container.className = 'relative w-full h-full';
         container.style.transformStyle = 'preserve-3d';
 
         if (!card) {
             container.classList.add('card-placeholder');
-            // プレースホルダーも向き制御を適用
-            CardOrientationManager.applyCardOrientation(container, playerType, zone);
+            // 注: 向き制御は親スロットの data-orientation を CSS が継承
             return container;
         }
 
         // --- 向き・所有者は data-* で管理 ---
-        // Z-indexに頼らず、3D空間で手前に配置
-        ZIndexManager.applyTranslateZ(container, 'TZ_CARD_SLOT');
+        // NOTE: CSS 3D (translateZ) は削除、3D表示はThree.jsが担当
+        // 回転は親スロットのCSSで制御（data-orientation属性に基づく）
 
         // DOM識別は runtimeId を優先（重複回避）。マスターIDも保持（カード種別の参照用）。
         container.dataset.runtimeId = card.runtimeId || card.id;
@@ -1084,23 +1170,22 @@ export class View {
         img.alt = shouldShowBack ? 'Card Back' : card.name_ja;
         container.appendChild(img);
 
-        // 向きを最終確定（data-orientation を付与）
-        CardOrientationManager.applyCardOrientation(container, playerType, zone);
+        // 注: 向き制御は親スロットの data-orientation を CSS が継承
 
 
         // --- イベントリスナー ---
         // 手札カードのクリック処理は親のhandSlotで処理するため、ここでは削除
-        
+
         // 表向きのカードなら誰のでも詳細表示リスナーを追加
         if (!isFaceDown) {
             container.classList.add('cursor-pointer');
-            
+
             // 右クリックで詳細表示
             container.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
                 this.showCardInfo(card);
             });
-            
+
             // 左クリック詳細表示を無効化（右クリックのみ）
         }
 
@@ -1109,8 +1194,7 @@ export class View {
             damageCounter.className = 'absolute top-1 right-1 bg-red-600 text-white text-lg font-bold rounded-full w-8 h-8 flex items-center justify-center';
             damageCounter.textContent = card.damage;
             damageCounter.style.pointerEvents = 'none';
-            // Z-indexに頼らず、3D空間で手前に配置
-            ZIndexManager.applyTranslateZ(damageCounter, 'TZ_DAMAGE_COUNTER');
+            // NOTE: CSS 3D (translateZ) は削除、3D表示はThree.jsが担当
             container.appendChild(damageCounter);
         }
 
@@ -1147,7 +1231,7 @@ export class View {
             message: contentHtml,
             allowHtml: true,
             actions: [
-              { text: '閉じる', callback: () => {}, className: 'px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg' }
+                { text: '閉じる', callback: () => { }, className: 'px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg' }
             ]
         });
 
@@ -1155,7 +1239,7 @@ export class View {
         setTimeout(() => {
             const img = document.querySelector('.card-info-modal-image');
             if (img) {
-                img.addEventListener('error', function() {
+                img.addEventListener('error', function () {
                     this.src = 'assets/ui/card_back.webp';
                 });
             }
@@ -1217,14 +1301,14 @@ export class View {
         // 属性・進化・にげる
         const typeBadges = (card.types || []).map(t => this._energyBadge(t)).join('');
         const stageLabel = (card.stage || '-')
-          .toString()
-          .replace(/^basic$/i, 'Basic')
-          .replace(/^stage\s*1$/i, 'Stage 1')
-          .replace(/^stage\s*2$/i, 'Stage 2')
-          .replace(/^stage1$/i, 'Stage 1')
-          .replace(/^stage2$/i, 'Stage 2')
-          .replace(/^ＢＡＳＩＣ$/i, 'Basic')
-          .replace(/^ＢＡＳＩＣ$/i, 'Basic');
+            .toString()
+            .replace(/^basic$/i, 'Basic')
+            .replace(/^stage\s*1$/i, 'Stage 1')
+            .replace(/^stage\s*2$/i, 'Stage 2')
+            .replace(/^stage1$/i, 'Stage 1')
+            .replace(/^stage2$/i, 'Stage 2')
+            .replace(/^ＢＡＳＩＣ$/i, 'Basic')
+            .replace(/^ＢＡＳＩＣ$/i, 'Basic');
         const stageLine = isPokemon ? `
           <div class="flex flex-wrap items-center gap-2 text-gray-300">
             <span><span class="text-purple-300 font-semibold">進化:</span> ${stageLabel}</span>
@@ -1237,15 +1321,15 @@ export class View {
 
         // 付いているエネルギー
         const attachedList = Array.isArray(card.attached_energy) ? card.attached_energy
-                            : Array.isArray(card.attachedEnergy) ? card.attachedEnergy
-                            : [];
+            : Array.isArray(card.attachedEnergy) ? card.attachedEnergy
+                : [];
         const energyCounts = this._groupEnergy(attachedList);
         const attachedEnergyHtml = isPokemon ? `
           <div class="bg-gray-800/60 border border-gray-700 rounded-md p-2">
             <div class="text-yellow-200 font-semibold mb-1">付いているエネルギー</div>
             ${energyCounts.length === 0 ? '<div class="text-gray-400 text-xs">なし</div>' : `
               <div class="flex flex-wrap gap-2">
-                ${energyCounts.map(({type, count}) => `
+                ${energyCounts.map(({ type, count }) => `
                   <div class="flex items-center gap-1 bg-gray-700 rounded px-2 py-1">
                     ${this._energyBadge(type)}
                     <span class="text-white text-sm font-semibold">×${count}</span>
@@ -1273,7 +1357,7 @@ export class View {
                 <div class="pb-2 border-b border-gray-700 last:border-b-0">
                   <div class="flex items-center justify-between gap-2">
                     <div class="flex items-center gap-2">
-                      <div class="flex items-center gap-1">${(atk.cost||[]).map(c => this._energyBadge(c)).join('')}</div>
+                      <div class="flex items-center gap-1">${(atk.cost || []).map(c => this._energyBadge(c)).join('')}</div>
                       <div class="text-white font-semibold">${atk.name_ja || ''}</div>
                     </div>
                     <div class="text-orange-300 font-bold">${atk.damage ?? ''}</div>
@@ -1289,21 +1373,21 @@ export class View {
         // Handle weakness as object or array
         let weakHtml = '';
         if (isPokemon && card.weakness) {
-          if (typeof card.weakness === 'object' && card.weakness.type) {
-            weakHtml = `<div class="text-gray-300"><span class="text-purple-300 font-semibold">弱点:</span> ${card.weakness.type} ${card.weakness.value}</div>`;
-          } else if (Array.isArray(card.weakness) && card.weakness.length > 0) {
-            weakHtml = `<div class="text-gray-300"><span class="text-purple-300 font-semibold">弱点:</span> ${card.weakness.map(w => `${w.type} ${w.value}`).join(', ')}</div>`;
-          }
+            if (typeof card.weakness === 'object' && card.weakness.type) {
+                weakHtml = `<div class="text-gray-300"><span class="text-purple-300 font-semibold">弱点:</span> ${card.weakness.type} ${card.weakness.value}</div>`;
+            } else if (Array.isArray(card.weakness) && card.weakness.length > 0) {
+                weakHtml = `<div class="text-gray-300"><span class="text-purple-300 font-semibold">弱点:</span> ${card.weakness.map(w => `${w.type} ${w.value}`).join(', ')}</div>`;
+            }
         }
-        
+
         // Handle resistance as object or array  
         let resistHtml = '';
         if (isPokemon && card.resistance) {
-          if (typeof card.resistance === 'object' && card.resistance.type) {
-            resistHtml = `<div class="text-gray-300"><span class="text-cyan-300 font-semibold">抵抗力:</span> ${card.resistance.type} ${card.resistance.value}</div>`;
-          } else if (Array.isArray(card.resistance) && card.resistance.length > 0) {
-            resistHtml = `<div class="text-gray-300"><span class="text-cyan-300 font-semibold">抵抗力:</span> ${card.resistance.map(r => `${r.type} ${r.value}`).join(', ')}</div>`;
-          }
+            if (typeof card.resistance === 'object' && card.resistance.type) {
+                resistHtml = `<div class="text-gray-300"><span class="text-cyan-300 font-semibold">抵抗力:</span> ${card.resistance.type} ${card.resistance.value}</div>`;
+            } else if (Array.isArray(card.resistance) && card.resistance.length > 0) {
+                resistHtml = `<div class="text-gray-300"><span class="text-cyan-300 font-semibold">抵抗力:</span> ${card.resistance.map(r => `${r.type} ${r.value}`).join(', ')}</div>`;
+            }
         }
 
         // 特殊状態
@@ -1313,7 +1397,7 @@ export class View {
 
         // エネルギー / トレーナー
         const nonPokemonHtml = isEnergy
-          ? `
+            ? `
               <div class="flex items-center gap-2">
                 <span class="text-yellow-300 font-semibold">エネルギー:</span>
                 ${this._energyBadge(card.energy_type || 'Colorless')}
@@ -1321,21 +1405,21 @@ export class View {
               </div>
               ${card.text_ja ? `<div class="text-gray-300 whitespace-pre-wrap">${card.text_ja}</div>` : ''}
             `
-          : isTrainer
-          ? `
+            : isTrainer
+                ? `
               <div class="flex items-center gap-2">
                 <span class="text-orange-300 font-semibold">トレーナー:</span>
                 <span class="text-gray-200">${card.trainer_type || '-'}</span>
               </div>
               ${card.text_ja ? `<div class="text-gray-300 whitespace-pre-wrap">${card.text_ja}</div>` : ''}
             `
-          : '';
+                : '';
 
         // 組み立て
         let html = nameLine;
         html += isPokemon
-          ? `<div class="space-y-3">${hpBar}${stageLine}${abilityHtml}${attacksHtml}${weakHtml}${resistHtml}${condHtml}${attachedEnergyHtml}</div>`
-          : `<div class="space-y-3">${nonPokemonHtml}</div>`;
+            ? `<div class="space-y-3">${hpBar}${stageLine}${abilityHtml}${attacksHtml}${weakHtml}${resistHtml}${condHtml}${attachedEnergyHtml}</div>`
+            : `<div class="space-y-3">${nonPokemonHtml}</div>`;
 
         return html;
     }
@@ -1417,7 +1501,7 @@ export class View {
             console.warn('⚠️ Panel type should not have actions. Use central modal or action HUD instead.');
             console.warn('Actions provided:', actions.map(a => a.text));
         }
-        
+
         // ボタンは表示しない（右側パネルはボタンなしポリシー）
         this.clearInteractiveButtons();
     }
@@ -1440,10 +1524,10 @@ export class View {
             if (this.gameMessageDisplay.textContent === message) {
                 return;
             }
-            
+
             this.gameMessageDisplay.textContent = message;
             this.gameMessageDisplay.classList.remove('hidden');
-            
+
             // メッセージアニメーション
             animationManager.animateMessage(this.gameMessageDisplay);
         }
@@ -1454,7 +1538,7 @@ export class View {
             this.gameMessageDisplay.classList.add('hidden');
         }
     }
-    
+
     /**
      * エラーメッセージ表示
      * @param {string} message - エラーメッセージ
@@ -1467,7 +1551,7 @@ export class View {
             modalManager.showCentralModal({
                 title: 'エラー',
                 message,
-                actions: [{ text: 'OK', callback: () => {} }],
+                actions: [{ text: 'OK', callback: () => { } }],
                 closable: true
             });
         } else {
@@ -1606,8 +1690,8 @@ export class View {
         // アクティブポケモンの状態
         if (this.activeStatus) {
             const hasActive = state.players.player.active !== null;
-            this.activeStatus.className = hasActive 
-                ? 'w-3 h-3 rounded-full bg-green-500 mr-2' 
+            this.activeStatus.className = hasActive
+                ? 'w-3 h-3 rounded-full bg-green-500 mr-2'
                 : 'w-3 h-3 rounded-full bg-red-500 mr-2';
         }
 
@@ -1620,8 +1704,8 @@ export class View {
         // ベンチの状態
         if (this.benchStatus) {
             const benchCount = state.players.player.bench.filter(slot => slot !== null).length;
-            this.benchStatus.className = benchCount > 0 
-                ? 'w-3 h-3 rounded-full bg-green-500 mr-2' 
+            this.benchStatus.className = benchCount > 0
+                ? 'w-3 h-3 rounded-full bg-green-500 mr-2'
                 : 'w-3 h-3 rounded-full bg-gray-500 mr-2';
         }
     }
@@ -1668,7 +1752,7 @@ export class View {
         slotElement.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            
+
             const cardInSlot = slotElement.querySelector('[data-card-id]');
             const cardId = cardInSlot ? (cardInSlot.dataset.runtimeId || cardInSlot.dataset.cardId) : null;
 
@@ -1679,7 +1763,7 @@ export class View {
                 cardId: cardId,
                 runtimeId: cardId // 後方互換: handler側は cardId を読む
             };
-            
+
             this.cardClickHandler(dataset);
         });
 
@@ -1699,7 +1783,7 @@ export class View {
             slotElement.addEventListener('drop', (e) => {
                 e.preventDefault();
                 slotElement.classList.remove('drag-over');
-                
+
                 try {
                     const dragData = JSON.parse(e.dataTransfer.getData('text/plain'));
                     this.dragDropHandler({
@@ -1719,17 +1803,17 @@ export class View {
 
     _clearBoard() {
         noop('🧹 Clearing board');
-        
+
         // HTMLを空にするだけ - DOMノード自体は保持してイベント重複を防止
         const allSlots = document.querySelectorAll('.card-slot');
         allSlots.forEach(slot => {
             slot.innerHTML = '';
         });
-        
+
         // Clear hand areas
         if (this.playerHand) this.playerHand.innerHTML = '';
         if (this.cpuHand) this.cpuHand.innerHTML = '';
-        
+
         noop('✅ Board cleared');
     }
 
@@ -1767,20 +1851,20 @@ export class View {
     validateLayerHierarchy() {
         const cpuHandArea = document.getElementById('cpu-hand-area');
         const opponentBoard = document.querySelector('.opponent-board');
-        
+
         if (cpuHandArea && opponentBoard) {
             const cpuHandStyle = window.getComputedStyle(cpuHandArea);
             const opponentBoardStyle = window.getComputedStyle(opponentBoard);
-            
+
             const cpuHandZIndex = parseInt(cpuHandStyle.zIndex) || 0;
             const opponentBoardZIndex = parseInt(opponentBoardStyle.zIndex) || 0;
-            
+
             gameLogger.logGameEvent('LAYOUT', 'レイヤー階層検証', {
                 'CPU手札': `z-index: ${cpuHandZIndex}, position: ${cpuHandStyle.position}`,
                 '相手フィールド': `z-index: ${opponentBoardZIndex}, position: ${opponentBoardStyle.position}`,
                 '階層関係': cpuHandZIndex > opponentBoardZIndex ? '✅ CPU手札が上位' : '⚠️ 階層要確認'
             });
-            
+
             // レイヤー競合の警告
             if (cpuHandZIndex <= opponentBoardZIndex) {
                 gameLogger.logGameEvent('ERROR', 'レイヤー競合検出: CPU手札のz-indexが相手フィールド以下');
@@ -1795,10 +1879,10 @@ export class View {
     _initCpuHandDock() {
         const container = document.getElementById('cpu-hand');
         if (!container) return;
-        
+
         // CPU手札にもMac Dockクラスを追加
         container.classList.add('hand-dock');
-        
+
         // プレイヤーより少し控えめな設定値でCPU専用に最適化
         const screenWidth = window.innerWidth || 800;
         const RADIUS = Math.min(180, screenWidth * 0.22);  // 少し狭い範囲
@@ -1807,7 +1891,7 @@ export class View {
         const MAX_LIFT = Math.min(60, screenWidth * 0.06);
         const BASE_GAP = 2;
         const MAX_GAP = Math.min(8, screenWidth * 0.01);
-        
+
         // CPU手札専用：現在のCPU思考状態を追跡
         this._cpuFocusIndex = 0; // CPUが注目しているカードのインデックス
         this._cpuFocusTimer = null;
@@ -1823,7 +1907,7 @@ export class View {
                 el.style.marginRight = `${BASE_GAP}px`;
                 ZIndexManager.setHandNormal(el);
             });
-            
+
             if (rafId) {
                 cancelAnimationFrame(rafId);
                 rafId = null;
@@ -1837,7 +1921,7 @@ export class View {
                 // CPUが注目しているカードかどうかを判定
                 const isFocused = (focusIndex >= 0 && index === focusIndex);
                 const isNearFocus = Math.abs(index - focusIndex) === 1; // 隣接カード
-                
+
                 let scale, lift, gap;
                 if (isFocused) {
                     // 注目カードは最大拡大
@@ -1869,13 +1953,13 @@ export class View {
         const startCpuThinking = () => {
             const cards = container.querySelectorAll('.hand-slot.hand-card, .hand-slot .card-placeholder');
             if (cards.length === 0) return;
-            
+
             // CPUが思考中であることを示すアニメーション
             this._cpuFocusTimer = setInterval(() => {
                 this._cpuFocusIndex = (this._cpuFocusIndex + 1) % Math.max(cards.length, 1);
                 applyCpuFocus(this._cpuFocusIndex);
             }, 2000); // 2秒ごとに別のカードに注目
-            
+
             // 初回実行
             applyCpuFocus(this._cpuFocusIndex);
         };
@@ -1902,12 +1986,12 @@ export class View {
         document.addEventListener('cpu-turn-start', handleCpuTurnStart);
         document.addEventListener('cpu-turn-end', handleCpuTurnEnd);
         document.addEventListener('player-turn-start', handleCpuTurnEnd);
-        
+
         // 手動制御用の公開関数
         container._cpuFocus = applyCpuFocus;
         container._startCpuThinking = startCpuThinking;
         container._stopCpuThinking = stopCpuThinking;
-        
+
         // 初期状態で軽い思考アニメーション開始
         setTimeout(() => startCpuThinking(), 1000);
     }

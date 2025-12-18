@@ -318,11 +318,12 @@ export class ActionHUDManager {
                 break;
 
             case 'playerMain':
-                // プレイヤーメインフェーズ: にげる、攻撃、ターン終了
+                // プレイヤーメインフェーズ: にげる、攻撃、進化、ターン終了
                 const mainButtons = [
                     { id: BUTTON_IDS.RETREAT, callback: callbacks.retreat, options: { text: 'にげる', icon: '🏃' } },
                     { id: BUTTON_IDS.ATTACK, callback: callbacks.attack, options: { text: '攻撃', icon: '⚔️' } },
-                    { id: BUTTON_IDS.END_TURN, callback: callbacks.endTurn, options: { text: 'ターン終了', icon: '🔄' } }
+                    { id: BUTTON_IDS.EVOLVE, callback: callbacks.evolve, options: { text: '進化', icon: '🔄' } },
+                    { id: BUTTON_IDS.END_TURN, callback: callbacks.endTurn, options: { text: 'ターン終了', icon: '➡️' } }
                 ];
                 this.showButtons(mainButtons);
                 break;

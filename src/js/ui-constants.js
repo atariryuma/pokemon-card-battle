@@ -71,6 +71,7 @@ export const ACTION_BUTTON_GROUPS = {
     PLAYER_MAIN: [
         BUTTON_IDS.RETREAT,
         BUTTON_IDS.ATTACK,
+        BUTTON_IDS.EVOLVE,
         BUTTON_IDS.END_TURN
     ],
     
@@ -116,12 +117,14 @@ export const PHASE_BUTTON_CONFIG = {
         defaultText: {
             [BUTTON_IDS.RETREAT]: 'にげる',
             [BUTTON_IDS.ATTACK]: '攻撃',
+            [BUTTON_IDS.EVOLVE]: '進化',
             [BUTTON_IDS.END_TURN]: 'ターン終了'
         },
         defaultIcon: {
             [BUTTON_IDS.RETREAT]: '🏃',
             [BUTTON_IDS.ATTACK]: '⚔️',
-            [BUTTON_IDS.END_TURN]: '🔄'
+            [BUTTON_IDS.EVOLVE]: '🔄',
+            [BUTTON_IDS.END_TURN]: '➡️'
         }
     }
 };

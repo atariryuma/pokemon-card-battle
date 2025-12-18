@@ -1,0 +1,139 @@
+/**
+ * THREE.JS PLAYMAT
+ * 
+ * プレイマット（ゲームボード）の3D表現
+ * - テクスチャ付きの Plane
+ * - 座標系のマッピング
+ */
+
+import * as THREE from 'three';
+
+export class Playmat {
+    constructor(scene, textureUrl) {
+        this.scene = scene;
+        this.textureUrl = textureUrl;
+        this.mesh = null;
+
+        // プレイマットサイズ（Three.js単位）
+        this.size = 600;  // 調整可能
+
+        this._create();
+    }
+
+    /**
+     * プレイマット作成
+     */
+    async _create() {
+        const loader = new THREE.TextureLoader();
+
+        try {
+            const texture = await new Promise((resolve, reject) => {
+                loader.load(
+                    this.textureUrl,
+                    resolve,
+                    undefined,
+                    reject
+                );
+            });
+
+            // テクスチャ設定
+            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.anisotropy = 16;
+
+            // マテリアル
+            const material = new THREE.MeshStandardMaterial({
+                map: texture,
+                side: THREE.FrontSide,
+            });
+
+            // ジオメトリ（正方形の Plane）
+            const geometry = new THREE.PlaneGeometry(this.size, this.size);
+
+            // メッシュ作成
+            this.mesh = new THREE.Mesh(geometry, material);
+
+            // 水平に配置（Y軸回りに90度回転して地面に）
+            this.mesh.rotation.x = -Math.PI / 2;
+            this.mesh.position.y = 0;
+
+            // レイキャスト用のユーザーデータ
+            this.mesh.userData = {
+                type: 'playmat',
+                isInteractive: false,  // プレイマット自体はクリック対象外
+            };
+
+            this.scene.add(this.mesh);
+
+            console.log('🎴 Playmat created');
+        } catch (error) {
+            console.error('❌ Failed to load playmat texture:', error);
+            // フォールバック：単色プレイマット
+            this._createFallback();
+        }
+    }
+
+    /**
+     * フォールバック（テクスチャ読み込み失敗時）
+     */
+    _createFallback() {
+        const material = new THREE.MeshStandardMaterial({
+            color: 0x2d4a2d,  // 緑系のマット色
+            side: THREE.FrontSide,
+        });
+
+        const geometry = new THREE.PlaneGeometry(this.size, this.size);
+        this.mesh = new THREE.Mesh(geometry, material);
+        this.mesh.rotation.x = -Math.PI / 2;
+
+        this.scene.add(this.mesh);
+        console.log('🎴 Playmat fallback created (no texture)');
+    }
+
+    /**
+     * プレイマット上の座標を3D座標に変換
+     * @param {number} x - プレイマット上のX座標（0-1の割合）
+     * @param {number} y - プレイマット上のY座標（0-1の割合）
+     * @returns {THREE.Vector3} 3D座標
+     */
+    mapToWorld(x, y) {
+        // 0-1 を -size/2 ～ size/2 にマッピング
+        const worldX = (x - 0.5) * this.size;
+        const worldZ = (y - 0.5) * this.size;
+
+        return new THREE.Vector3(worldX, 0.1, worldZ);  // Y=0.1 でプレイマットより少し上
+    }
+
+    /**
+     * ピクセル座標を3D座標に変換
+     * @param {number} px - ピクセルX座標
+     * @param {number} py - ピクセルY座標
+     * @param {number} playmatPixelSize - プレイマットのピクセルサイズ
+     * @returns {THREE.Vector3} 3D座標
+     */
+    mapPixelToWorld(px, py, playmatPixelSize = 679) {
+        return this.mapToWorld(px / playmatPixelSize, py / playmatPixelSize);
+    }
+
+    /**
+     * メッシュ取得
+     */
+    getMesh() {
+        return this.mesh;
+    }
+
+    /**
+     * クリーンアップ
+     */
+    dispose() {
+        if (this.mesh) {
+            this.mesh.geometry.dispose();
+            if (this.mesh.material.map) {
+                this.mesh.material.map.dispose();
+            }
+            this.mesh.material.dispose();
+            this.scene.remove(this.mesh);
+        }
+    }
+}
+
+export default Playmat;

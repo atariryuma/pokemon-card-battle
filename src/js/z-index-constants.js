@@ -44,11 +44,8 @@ export const Z_INDEX = {
     MODALS: 500,           // --z-modals
     CRITICAL: 600,         // --z-critical (致命的エラー)
 
-    // === 3D Transform Z-Depth (translateZ) ===
-    TZ_CARD_SLOT: 1,
-    TZ_DAMAGE_COUNTER: 1,
-    TZ_CARD_IMAGE_BASE: 0,
-    TZ_GAME_BOARD: 0,
+    // NOTE: CSS 3D Transform (translateZ) は削除
+    // 3D表示はThree.js (src/js/three/scene.js) が担当
 };
 
 /**
@@ -81,11 +78,8 @@ export const Z_CSS_VARS = {
     MODALS: 'var(--z-modals)',
     CRITICAL: 'var(--z-critical)',
 
-    // === 3D Transform Z-Depth (translateZ) ===
-    TZ_CARD_SLOT: 'var(--tz-card-slot)',
-    TZ_DAMAGE_COUNTER: 'var(--tz-damage-counter)',
-    TZ_CARD_IMAGE_BASE: 'var(--tz-card-image-base)',
-    TZ_GAME_BOARD: 'var(--tz-game-board)',
+    // NOTE: CSS 3D Transform (translateZ) は削除
+    // 3D表示はThree.js (src/js/three/scene.js) が担当
 };
 
 /**
@@ -192,21 +186,8 @@ export class ZIndexManager {
         this.apply(element, 'BOARD_BG');
     }
 
-    /**
-     * 要素にtranslateZを適用（CSS変数使用）
-     * @param {Element} element - 対象要素
-     * @param {string} level - Z_CSS_VARSのTZ_キー
-     * @param {string} [additionalTransform=''] - 追加のtransformプロパティ（例: 'rotateX(10deg) scale(0.98)'）
-     */
-    static applyTranslateZ(element, level, additionalTransform = '') {
-        if (!element || !Z_CSS_VARS[level]) {
-            console.warn(`Invalid element or translateZ level: ${level}`);
-            return;
-        }
-
-        const cssVar = Z_CSS_VARS[level];
-        element.style.transform = `translateZ(${cssVar})${additionalTransform ? ' ' + additionalTransform : ''}`;
-    }
+    // NOTE: applyTranslateZ は削除
+    // CSS 3D Transform は使用せず、3D表示はThree.jsが担当
 }
 
 /**

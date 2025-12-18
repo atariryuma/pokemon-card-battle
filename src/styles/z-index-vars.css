@@ -1,9 +1,22 @@
 :root {
-    /* === Z-Index レイヤー管理 === */
+    /* ==========================================
+       Z-Index レイヤー管理（論理的階層順）
+
+       レイヤー構造:
+       1. 背景・ボード (0-50)
+       2. カード・スロット (50-150)
+       3. 手札エリア (200-250) ※プレイヤー > CPU
+       4. UI要素 (300-500)
+       5. オーバーレイ (500+)
+       ========================================== */
+
+    /* === Layer 1: 背景・ボード === */
     --z-board-bg: 0;
     --z-board: 10;
     --z-placeholder: 15;
     --z-slots: 20;
+
+    /* === Layer 2: カード・デッキ === */
     --z-deck-effects: 50;
     --z-side-stack-1: 55;
     --z-side-stack-2: 60;
@@ -13,34 +26,38 @@
     --z-card-hover: 100;
     --z-card-effects: 110;
     --z-highlight: 120;
-    --z-cpu-hand-base: 150;
-    --z-cpu-hand-fan: 160;
-    --z-hand-area: 200;
-    --z-hand: 210;
-    --z-hand-hover: 230;
+
+    /* === Layer 3: 手札エリア（プレイヤー > CPU） === */
+    --z-cpu-hand-base: 200;      /* CPU手札（奥） */
+    --z-cpu-hand-fan: 210;
+    --z-hand-area: 220;          /* プレイヤー手札エリア */
+    --z-hand: 230;               /* プレイヤー手札（手前） */
+    --z-hand-hover: 240;
+
+    /* === Layer 4: アニメーション・選択 === */
     --z-animations: 300;
     --z-selected: 320;
     --z-placeholder-hover: 330;
+
+    /* === Layer 5: UI要素 === */
     --z-hud-base: 400;
-    --z-floating-hud: 420;
-    --z-panels: 450;
-    --z-toast: 480;
-    --z-modals: 600;
-    --z-critical: 700;
+    --z-floating-hud: 410;
+    --z-panels: 420;             /* HUDより上 */
+    --z-toast: 450;
 
-    /* === 3D Transform Z-Depth === */
-    --tz-card-slot: 1px;
-    --tz-damage-counter: 2px;
-    --tz-card-image-base: 0px;
-    --tz-game-board: -200px;     /* プレイマット下地をさらに奥に */
-    
-    /* === フィールド3D配置 === */
-    --tz-player-field: 5px;        /* プレイヤーフィールド - 最前面 */
-    --tz-player-slots: 6px;        /* プレイヤースロット - フィールドより前 */
-    --tz-opponent-field: 1px;      /* 相手フィールド - 奥に配置 */
-    --tz-opponent-slots: 2px;      /* 相手スロット - フィールドより前だが手前ではない */
+    /* === Layer 6: オーバーレイ === */
+    --z-modals: 500;
+    --z-critical: 600;
 
-    /* === レスポンシブレイアウト === */
+    /* ==========================================
+       NOTE: CSS 3D Transform変数は削除
+       3D表示はThree.js (src/js/three/scene.js) が担当
+       カメラ設定はscene.jsのthis.configで一元管理
+       ========================================== */
+
+    /* ==========================================
+       レスポンシブレイアウト
+       ========================================== */
     --viewport-padding: clamp(8px, 1vw, 16px);
     --hand-height: clamp(100px, 18vh, 160px);
     --card-size-ratio: clamp(0.6, 1.2vw, 1.0);
