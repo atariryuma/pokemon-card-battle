@@ -58,7 +58,9 @@
       "Bash(cd:*)",
       "Bash(npm run lint:*)",
       "Bash(python3:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nfeat: Add Three.js animations and effects from CSS\n\n- Camera adjustments: angle 45°, distance 800, offset Z=80\n- Card animations:\n  - Breathing animation \\(floating hand cards\\)\n  - Hover effect \\(scale + lift\\)\n  - Selection glow \\(blue pulse\\)\n  - Highlight glow \\(green\\)\n  - Type-based glow effects\n- Combat animations:\n  - Attack animation \\(forward movement\\)\n  - Damage shake animation\n  - Knockout animation \\(spin + fade\\)\n  - HP flash animation \\(red flicker\\)\n  - Screen shake effect\n- Fixed card rendering: layFlat\\(\\) only for non-hand cards\n- Simplified hand card rotation logic\n- Added animation APIs to GameBoard3D and ThreeViewBridge\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
     ],
     "deny": [],
     "ask": [],

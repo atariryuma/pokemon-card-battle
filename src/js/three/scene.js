@@ -22,11 +22,11 @@ export class ThreeScene {
         // 参考: https://www.osd.net/blog/web-development/3d-board-game-in-a-browser-using-webgl-and-three-js-part-1/
         // 参考: https://gdkeys.com/the-card-games-ui-design-of-fairtravel-battle/
         this.config = {
-            cameraAngle: 50,        // 度（50度 - 斜め上から俯瞰）
-            cameraDistance: 800,    // カメラ距離（全体が見えるように調整）
-            cameraOffsetY: 20,      // プレイヤー側を大きく見せるためのオフセット
+            cameraAngle: 45,        // 度（45度 - 斜め上から見下ろす）
+            cameraDistance: 800,    // カメラ距離
+            cameraOffsetZ: 80,      // プレイマットを奥に
             playmatSize: 679,       // プレイマットサイズ
-            fov: 45,                // 視野角（45度 - バランス良く）
+            fov: 50,                // 視野角（50度）
         };
 
         this._init();
@@ -109,7 +109,7 @@ export class ThreeScene {
         // カメラ位置：設定角度で見下ろす
         const radians = THREE.MathUtils.degToRad(this.config.cameraAngle);
         const distance = this.config.cameraDistance;
-        const offsetY = this.config.cameraOffsetY || 0;
+        const offsetZ = this.config.cameraOffsetZ || 0;
 
         // Y軸（高さ）とZ軸（奥行き）を計算
         this.camera.position.set(
@@ -118,9 +118,9 @@ export class ThreeScene {
             Math.cos(radians) * distance    // Z: 奥行き（プレイヤー側に近い）
         );
 
-        // 少し相手側にオフセットして見ることでプレイヤー側を大きく表示
-        // （60:40の比率を実現）
-        this.camera.lookAt(0, 0, -offsetY);
+        // プレイマットを奥にスライドするため、視点中心をオフセット
+        // 負の値で奥側を見る → プレイマットが画面上部に移動し、手前にスペースができる
+        this.camera.lookAt(0, 0, offsetZ);
     }
 
     /**
@@ -196,11 +196,29 @@ export class ThreeScene {
     }
 
     /**
+     * アニメーション更新コールバックを設定
+     */
+    setUpdateCallback(callback) {
+        this.updateCallback = callback;
+    }
+
+    /**
      * アニメーションループ開始
      */
     start() {
+        const startTime = performance.now();
+
         const animate = () => {
             this.animationId = requestAnimationFrame(animate);
+
+            // 経過時間（秒）
+            const time = (performance.now() - startTime) / 1000;
+
+            // 更新コールバックを呼び出し
+            if (this.updateCallback) {
+                this.updateCallback(time);
+            }
+
             this.renderer.render(this.scene, this.camera);
         };
         animate();

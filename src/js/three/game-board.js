@@ -76,6 +76,11 @@ export class GameBoard3D {
         // スロット作成
         this._createSlots();
 
+        // アニメーション更新コールバック設定
+        this.threeScene.setUpdateCallback((time) => {
+            this.updateAnimations(time);
+        });
+
         // アニメーションループ開始
         this.threeScene.start();
 
@@ -456,13 +461,13 @@ export class GameBoard3D {
 
         // ファン型レイアウトの設定
         // プレイマットサイズ600の半分=300が端
-        // 手札は画面内に収まるよう、X座標の広がりを制限
+        // カメラを引いたので、手札間隔を広げて見やすく
         const fanConfig = {
-            radius: 350,            // ファンの円の半径（小さくして画面内に収める）
-            maxAngle: 35,           // 最大展開角度（度）- 角度で広がりを調整
-            baseZ: isPlayer ? 320 : -320,  // 手札エリアのZ位置（プレイマット端より少し外）
+            radius: 450,            // ファンの円の半径（広めに）
+            maxAngle: 50,           // 最大展開角度（度）- カード間隔を広く
+            baseZ: isPlayer ? 380 : -380,  // 手札エリアのZ位置
             baseY: 15,              // 手札の高さ
-            cardTilt: isPlayer ? -55 : 55, // カードの前後傾き（度）
+            cardTilt: isPlayer ? -45 : 45, // カードの前後傾き（度）
         };
 
         // 中央を0とした正規化インデックス（-0.5 〜 0.5）
@@ -508,13 +513,23 @@ export class GameBoard3D {
         });
 
         const mesh = await card.create();
-        card.layFlat();
-        card.saveBasePosition();
+
+        // 手札以外のカードはプレイマット上に水平に配置
+        // 手札カードは呼び出し側で setRotation() で回転を設定する
+        if (options.zone !== 'hand') {
+            card.layFlat();
+        }
+
+        // 手札カードは呼吸アニメーションを有効化
+        if (options.zone === 'hand') {
+            card.enableBreathing(true);
+        }
 
         this.threeScene.add(mesh);
         this.interaction.register(mesh);
         this.cards.set(runtimeId, card);
 
+        // saveBasePosition は呼び出し側で位置設定後に呼ぶ
         return card;
     }
 
@@ -529,6 +544,132 @@ export class GameBoard3D {
             card.dispose();
             this.cards.delete(runtimeId);
         }
+    }
+
+    /**
+     * アニメーション更新（毎フレーム呼び出し）
+     * @param {number} time - 経過時間（秒）
+     */
+    updateAnimations(time) {
+        // すべてのカードのアニメーションを更新
+        this.cards.forEach(card => {
+            card.updateBreathing(time);
+            card.updateGlow(time);
+        });
+    }
+
+    /**
+     * カードの選択状態を設定
+     */
+    setCardSelected(runtimeId, selected) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            card.setSelected(selected);
+        }
+    }
+
+    /**
+     * カードのハイライト状態を設定
+     */
+    setCardHighlighted(runtimeId, highlighted) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            card.setHighlighted(highlighted);
+        }
+    }
+
+    /**
+     * 全カードの選択状態を解除
+     */
+    clearAllCardSelections() {
+        this.cards.forEach(card => card.setSelected(false));
+    }
+
+    /**
+     * 全カードのハイライトを解除
+     */
+    clearAllCardHighlights() {
+        this.cards.forEach(card => card.setHighlighted(false));
+    }
+
+    // ==========================================
+    // 戦闘アニメーションAPI
+    // ==========================================
+
+    /**
+     * カードの攻撃アニメーション
+     */
+    async animateCardAttack(runtimeId, duration = 400) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.animateAttack(duration);
+        }
+    }
+
+    /**
+     * カードのダメージシェイクアニメーション
+     */
+    async animateCardDamage(runtimeId, duration = 500, intensity = 8) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.animateDamageShake(duration, intensity);
+        }
+    }
+
+    /**
+     * カードのノックアウトアニメーション
+     */
+    async animateCardKnockout(runtimeId, duration = 800) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.animateKnockout(duration);
+        }
+    }
+
+    /**
+     * カードのHPフラッシュアニメーション
+     */
+    async animateCardHPFlash(runtimeId, duration = 400) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.animateHPFlash(duration);
+        }
+    }
+
+    /**
+     * 画面シェイク効果
+     */
+    animateScreenShake(duration = 400, intensity = 5) {
+        const camera = this.threeScene.getCamera();
+        if (!camera) return Promise.resolve();
+
+        return new Promise((resolve) => {
+            const startX = camera.position.x;
+            const startY = camera.position.y;
+            const startTime = performance.now();
+
+            const animate = () => {
+                const elapsed = performance.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                const decay = 1 - progress;
+                const shakeX = Math.sin(progress * Math.PI * 12) * intensity * decay;
+                const shakeY = Math.cos(progress * Math.PI * 10) * intensity * decay * 0.5;
+
+                camera.position.x = startX + shakeX;
+                camera.position.y = startY + shakeY;
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    camera.position.x = startX;
+                    camera.position.y = startY;
+                    resolve();
+                }
+            };
+
+            animate();
+        });
     }
 
     /**

@@ -317,12 +317,11 @@ export class ThreeViewBridge {
                 // 位置を更新（カード枚数変更時のため）
                 const pos = this.gameBoard3D.getHandCardPosition(owner, i, hand.length);
                 existingCard.setPosition(pos.x, pos.y, pos.z);
-                // ファン型レイアウト: rotationZはファンの傾き角度
-                // CPUの手札は裏向き（Y軸180度回転）
+                // 手札カードの回転設定
+                const rotationX = pos.rotationX || 0;
                 const rotationY = isCpu ? 180 : 0;
-                const fanRotationZ = pos.rotationZ || 0;
-                const finalRotationZ = isCpu ? (180 + fanRotationZ) : fanRotationZ;
-                existingCard.setRotation(pos.rotationX, rotationY, finalRotationZ);
+                const rotationZ = pos.rotationZ || 0;
+                existingCard.setRotation(rotationX, rotationY, rotationZ);
                 existingCard.saveBasePosition();
                 continue;
             }
@@ -337,18 +336,20 @@ export class ThreeViewBridge {
                 zone: 'hand',
                 owner,
                 index: i,
+                cardType: handCard.cardType || handCard.type,
             });
 
             if (card) {
                 const pos = this.gameBoard3D.getHandCardPosition(owner, i, hand.length);
                 card.setPosition(pos.x, pos.y, pos.z);
-                // ファン型レイアウト: rotationZはファンの傾き角度
-                // CPUの手札は裏向き（Y軸180度回転）
-                // setRotationは度数を受け取る: (rx, ry, rz)
+                // 手札カードの回転設定
+                // rotationX: 前後の傾き（プレイヤーに向ける）
+                // rotationY: CPU手札は裏向き
+                // rotationZ: ファンの傾き角度
+                const rotationX = pos.rotationX || 0;
                 const rotationY = isCpu ? 180 : 0;
-                const fanRotationZ = pos.rotationZ || 0;
-                const finalRotationZ = isCpu ? (180 + fanRotationZ) : fanRotationZ;
-                card.setRotation(pos.rotationX, rotationY, finalRotationZ);
+                const rotationZ = pos.rotationZ || 0;
+                card.setRotation(rotationX, rotationY, rotationZ);
 
                 card.saveBasePosition();
             }
@@ -524,6 +525,97 @@ export class ThreeViewBridge {
         if (this.gameBoard3D) {
             this.gameBoard3D.clearAllHighlights();
         }
+    }
+
+    /**
+     * カードの選択状態を設定
+     */
+    setCardSelected(runtimeId, selected) {
+        if (this.gameBoard3D) {
+            // 手札カードのキー形式に対応
+            const handKey = `hand-${runtimeId}`;
+            if (this.gameBoard3D.cards.has(handKey)) {
+                this.gameBoard3D.setCardSelected(handKey, selected);
+            } else if (this.gameBoard3D.cards.has(runtimeId)) {
+                this.gameBoard3D.setCardSelected(runtimeId, selected);
+            }
+        }
+    }
+
+    /**
+     * カードのハイライト状態を設定
+     */
+    setCardHighlighted(runtimeId, highlighted) {
+        if (this.gameBoard3D) {
+            const handKey = `hand-${runtimeId}`;
+            if (this.gameBoard3D.cards.has(handKey)) {
+                this.gameBoard3D.setCardHighlighted(handKey, highlighted);
+            } else if (this.gameBoard3D.cards.has(runtimeId)) {
+                this.gameBoard3D.setCardHighlighted(runtimeId, highlighted);
+            }
+        }
+    }
+
+    /**
+     * 全カードの選択状態を解除
+     */
+    clearAllCardSelections() {
+        if (this.gameBoard3D) {
+            this.gameBoard3D.clearAllCardSelections();
+        }
+    }
+
+    /**
+     * 全カードのハイライトを解除
+     */
+    clearAllCardHighlights() {
+        if (this.gameBoard3D) {
+            this.gameBoard3D.clearAllCardHighlights();
+        }
+    }
+
+    // ==========================================
+    // 戦闘アニメーションAPI
+    // ==========================================
+
+    /**
+     * 攻撃アニメーション
+     */
+    async animateAttack(runtimeId, duration = 400) {
+        if (!this.gameBoard3D) return;
+        await this.gameBoard3D.animateCardAttack(runtimeId, duration);
+    }
+
+    /**
+     * ダメージアニメーション
+     */
+    async animateDamage(runtimeId, duration = 500, intensity = 8) {
+        if (!this.gameBoard3D) return;
+        await this.gameBoard3D.animateCardDamage(runtimeId, duration, intensity);
+    }
+
+    /**
+     * ノックアウトアニメーション
+     */
+    async animateKnockout(runtimeId, duration = 800) {
+        if (!this.gameBoard3D) return;
+        await this.gameBoard3D.animateCardKnockout(runtimeId, duration);
+    }
+
+    /**
+     * HPフラッシュアニメーション
+     */
+    async animateHPFlash(runtimeId, duration = 400) {
+        if (!this.gameBoard3D) return;
+        await this.gameBoard3D.animateCardHPFlash(runtimeId, duration);
+    }
+
+    /**
+     * 画面シェイク効果
+     */
+    async animateScreenShake(duration = 400, intensity = 5) {
+        if (!this.gameBoard3D) return;
+        await this.gameBoard3D.animateScreenShake(duration, intensity);
     }
 
     /**
