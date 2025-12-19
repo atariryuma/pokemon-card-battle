@@ -88,31 +88,6 @@ export class Playmat {
     }
 
     /**
-     * プレイマット上の座標を3D座標に変換
-     * @param {number} x - プレイマット上のX座標（0-1の割合）
-     * @param {number} y - プレイマット上のY座標（0-1の割合）
-     * @returns {THREE.Vector3} 3D座標
-     */
-    mapToWorld(x, y) {
-        // 0-1 を -size/2 ～ size/2 にマッピング
-        const worldX = (x - 0.5) * this.size;
-        const worldZ = (y - 0.5) * this.size;
-
-        return new THREE.Vector3(worldX, 0.1, worldZ);  // Y=0.1 でプレイマットより少し上
-    }
-
-    /**
-     * ピクセル座標を3D座標に変換
-     * @param {number} px - ピクセルX座標
-     * @param {number} py - ピクセルY座標
-     * @param {number} playmatPixelSize - プレイマットのピクセルサイズ
-     * @returns {THREE.Vector3} 3D座標
-     */
-    mapPixelToWorld(px, py, playmatPixelSize = 679) {
-        return this.mapToWorld(px / playmatPixelSize, py / playmatPixelSize);
-    }
-
-    /**
      * メッシュ取得
      */
     getMesh() {

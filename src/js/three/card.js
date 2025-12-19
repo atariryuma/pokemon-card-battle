@@ -107,6 +107,15 @@ export class Card3D {
     }
 
     /**
+     * マテリアル配列を安全に取得
+     * @returns {THREE.Material[]}
+     */
+    _getMaterials() {
+        if (!this.mesh) return [];
+        return Array.isArray(this.mesh.material) ? this.mesh.material : [this.mesh.material];
+    }
+
+    /**
      * カードメッシュを作成（最適化済み）
      */
     async create() {
@@ -287,13 +296,11 @@ export class Card3D {
     }
 
     /**
-     * ベース位置を保存
+     * ベース位置を保存（呼吸アニメーション・ホバー効果用）
      */
     saveBasePosition() {
         if (this.mesh) {
             this.mesh.userData.baseY = this.mesh.position.y;
-            this.mesh.userData.baseX = this.mesh.position.x;
-            this.mesh.userData.baseZ = this.mesh.position.z;
         }
     }
 
@@ -539,7 +546,8 @@ export class Card3D {
             const startTime = performance.now();
 
             // マテリアルの透明度を有効化
-            this.mesh.material.forEach(m => {
+            const materials = this._getMaterials();
+            materials.forEach(m => {
                 m.transparent = true;
             });
 
@@ -555,7 +563,7 @@ export class Card3D {
                 this.mesh.scale.set(scale, scale, scale);
                 this.mesh.rotation.z = startRotation + eased * Math.PI * 0.5;
 
-                this.mesh.material.forEach(m => {
+                materials.forEach(m => {
                     m.opacity = 1 - eased;
                 });
 
@@ -583,7 +591,8 @@ export class Card3D {
             }
 
             const startTime = performance.now();
-            const originalColors = this.mesh.material.map(m => m.color.getHex());
+            const materials = this._getMaterials();
+            const originalColors = materials.map(m => m.color.getHex());
 
             const animate = () => {
                 const elapsed = performance.now() - startTime;
@@ -593,7 +602,7 @@ export class Card3D {
                 const flash = Math.sin(progress * Math.PI * 4);
                 const red = flash > 0 ? 1 : 0.5;
 
-                this.mesh.material.forEach((m, i) => {
+                materials.forEach((m, i) => {
                     if (i === 4 || i === 5) { // 前面と背面のみ
                         m.color.setRGB(red, 0.3, 0.3);
                     }
@@ -603,7 +612,7 @@ export class Card3D {
                     requestAnimationFrame(animate);
                 } else {
                     // 元の色に戻す
-                    this.mesh.material.forEach((m, i) => {
+                    materials.forEach((m, i) => {
                         m.color.setHex(originalColors[i]);
                     });
                     resolve();
@@ -640,7 +649,7 @@ export class Card3D {
             this.mesh.rotation.z += startRotation;
 
             // 透明度設定
-            this.mesh.material.forEach(m => {
+            this._getMaterials().forEach(m => {
                 m.transparent = true;
                 m.opacity = 0;
             });
@@ -654,7 +663,7 @@ export class Card3D {
 
                 this.mesh.position.y = startY + (targetY - startY) * eased;
                 this.mesh.rotation.z = startRotation * (1 - eased);
-                this.mesh.material.forEach(m => {
+                this._getMaterials().forEach(m => {
                     m.opacity = eased;
                 });
 
@@ -663,7 +672,7 @@ export class Card3D {
                 } else {
                     this.mesh.position.y = targetY;
                     this.mesh.rotation.z = 0;
-                    this.mesh.material.forEach(m => {
+                    this._getMaterials().forEach(m => {
                         m.opacity = 1;
                     });
                     resolve();
@@ -694,7 +703,7 @@ export class Card3D {
             // 初期状態
             this.mesh.scale.set(startScale, startScale, startScale);
             this.mesh.rotation.z = startRotation;
-            this.mesh.material.forEach(m => {
+            this._getMaterials().forEach(m => {
                 m.transparent = true;
                 m.opacity = 0;
             });
@@ -709,7 +718,7 @@ export class Card3D {
                 const scale = startScale + (targetScale - startScale) * eased;
                 this.mesh.scale.set(scale, scale, scale);
                 this.mesh.rotation.z = startRotation * (1 - eased);
-                this.mesh.material.forEach(m => {
+                this._getMaterials().forEach(m => {
                     m.opacity = eased;
                 });
 
@@ -718,7 +727,7 @@ export class Card3D {
                 } else {
                     this.mesh.scale.set(targetScale, targetScale, targetScale);
                     this.mesh.rotation.z = 0;
-                    this.mesh.material.forEach(m => {
+                    this._getMaterials().forEach(m => {
                         m.opacity = 1;
                     });
                     resolve();
@@ -810,7 +819,7 @@ export class Card3D {
 
                 // 透明度の揺らぎ
                 const opacity = 0.8 + 0.2 * Math.abs(Math.sin(progress * Math.PI));
-                this.mesh.material.forEach(m => {
+                this._getMaterials().forEach(m => {
                     m.transparent = true;
                     m.opacity = opacity;
                 });
@@ -820,7 +829,7 @@ export class Card3D {
                 } else {
                     this.mesh.scale.set(baseScale, baseScale, baseScale);
                     this.mesh.position.y = baseY;
-                    this.mesh.material.forEach(m => {
+                    this._getMaterials().forEach(m => {
                         m.opacity = 1;
                     });
                     resolve();
@@ -1041,7 +1050,7 @@ export class Card3D {
             // 金色のグロー
             this._createGlowEffect(0xfcd34d, 1.2);
 
-            this.mesh.material.forEach(m => {
+            this._getMaterials().forEach(m => {
                 m.transparent = true;
             });
 
@@ -1055,7 +1064,7 @@ export class Card3D {
                 this.mesh.rotation.z = THREE.MathUtils.degToRad(5 * progress);
 
                 const opacity = 1 - progress;
-                this.mesh.material.forEach(m => {
+                this._getMaterials().forEach(m => {
                     m.opacity = opacity;
                 });
 
@@ -1158,7 +1167,7 @@ export class Card3D {
 
             // 透明度も揺らす
             const opacity = 0.6 + Math.sin(time * 0.5) * 0.4;
-            this.mesh.material.forEach(m => {
+            this._getMaterials().forEach(m => {
                 m.transparent = true;
                 m.opacity = opacity;
             });
@@ -1206,7 +1215,7 @@ export class Card3D {
         this._removeGlowEffect();
         if (this.mesh) {
             this.mesh.geometry.dispose();
-            this.mesh.material.forEach(m => {
+            this._getMaterials().forEach(m => {
                 if (m.map) m.map.dispose();
                 m.dispose();
             });
