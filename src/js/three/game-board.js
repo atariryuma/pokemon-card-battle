@@ -7,6 +7,7 @@
  * - 既存ゲームロジック（game.js）との接続
  */
 
+import * as THREE from 'three';
 import { ThreeScene } from './scene.js';
 import { Playmat } from './playmat.js';
 import { CardSlot } from './card-slot.js';
@@ -555,6 +556,7 @@ export class GameBoard3D {
         this.cards.forEach(card => {
             card.updateBreathing(time);
             card.updateGlow(time);
+            card.updateConditionAnimations(time);
         });
     }
 
@@ -670,6 +672,203 @@ export class GameBoard3D {
 
             animate();
         });
+    }
+
+    /**
+     * 画面フラッシュ効果
+     */
+    animateScreenFlash(duration = 300, color = 0xffffff) {
+        const scene = this.threeScene.getScene();
+        if (!scene) return Promise.resolve();
+
+        return new Promise((resolve) => {
+            // フラッシュ用のオーバーレイを作成
+            const geometry = new THREE.PlaneGeometry(2000, 2000);
+            const material = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0,
+                side: THREE.DoubleSide,
+                depthTest: false,
+            });
+            const flash = new THREE.Mesh(geometry, material);
+
+            // カメラの前に配置
+            const camera = this.threeScene.getCamera();
+            flash.position.copy(camera.position);
+            flash.position.z -= 50;
+            flash.lookAt(camera.position);
+            scene.add(flash);
+
+            const startTime = performance.now();
+
+            const animate = () => {
+                const elapsed = performance.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                // フラッシュ効果
+                if (progress < 0.25) {
+                    material.opacity = progress / 0.25 * 0.8;
+                } else {
+                    material.opacity = 0.8 * (1 - (progress - 0.25) / 0.75);
+                }
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    scene.remove(flash);
+                    geometry.dispose();
+                    material.dispose();
+                    resolve();
+                }
+            };
+
+            animate();
+        });
+    }
+
+    // ==========================================
+    // カード配布・移動アニメーションAPI
+    // ==========================================
+
+    /**
+     * カード配布アニメーション
+     */
+    async animateCardDeal(runtimeId, duration = 600) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.animateDealCard(duration);
+        }
+    }
+
+    /**
+     * カードドローアニメーション
+     */
+    async animateCardDraw(runtimeId, duration = 400) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.animateDrawCard(duration);
+        }
+    }
+
+    /**
+     * カードプレイアニメーション
+     */
+    async animateCardPlay(runtimeId, duration = 400) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.animatePlayCard(duration);
+        }
+    }
+
+    /**
+     * カードをアクティブに移動するアニメーション
+     */
+    async animateCardToActive(runtimeId, duration = 400) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.animateToActive(duration);
+        }
+    }
+
+    /**
+     * カードをベンチに移動するアニメーション
+     */
+    async animateCardToBench(runtimeId, duration = 400) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.animateToBench(duration);
+        }
+    }
+
+    /**
+     * 進化アニメーション
+     */
+    async animateCardEvolution(runtimeId, duration = 800) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.animateEvolution(duration);
+        }
+    }
+
+    /**
+     * エネルギーアタッチアニメーション
+     */
+    async animateCardEnergyAttach(runtimeId, duration = 600) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.animateEnergyAttach(duration);
+        }
+    }
+
+    /**
+     * 回復グローアニメーション
+     */
+    async animateCardHeal(runtimeId, duration = 400) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.animateHealGlow(duration);
+        }
+    }
+
+    /**
+     * サイドカード取得アニメーション
+     */
+    async animateCardPrizeTake(runtimeId, duration = 400) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.animatePrizeTake(duration);
+        }
+    }
+
+    // ==========================================
+    // 特殊状態API
+    // ==========================================
+
+    /**
+     * カードの特殊状態を設定
+     */
+    setCardCondition(runtimeId, condition, enabled) {
+        const card = this.cards.get(runtimeId);
+        if (!card) return;
+
+        switch (condition) {
+            case 'poison':
+                card.setConditionPoison(enabled);
+                break;
+            case 'burn':
+                card.setConditionBurn(enabled);
+                break;
+            case 'sleep':
+                card.setConditionSleep(enabled);
+                break;
+            case 'paralyze':
+                card.setConditionParalyze(enabled);
+                break;
+            case 'confuse':
+                card.setConditionConfuse(enabled);
+                break;
+        }
+    }
+
+    /**
+     * タイプ別グロー効果を設定
+     */
+    setCardTypeGlow(runtimeId, type) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            card.setTypeGlow(type);
+        }
+    }
+
+    /**
+     * タイプ別グロー効果を解除
+     */
+    clearCardTypeGlow(runtimeId) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            card._removeGlowEffect();
+        }
     }
 
     /**

@@ -619,6 +619,138 @@ export class ThreeViewBridge {
     }
 
     /**
+     * 画面フラッシュ効果
+     */
+    async animateScreenFlash(duration = 300, color = 0xffffff) {
+        if (!this.gameBoard3D) return;
+        await this.gameBoard3D.animateScreenFlash(duration, color);
+    }
+
+    // ==========================================
+    // カード配布・移動アニメーションAPI
+    // ==========================================
+
+    /**
+     * カード配布アニメーション
+     */
+    async animateDealCard(runtimeId, duration = 600) {
+        if (!this.gameBoard3D) return;
+        const handKey = `hand-${runtimeId}`;
+        if (this.gameBoard3D.cards.has(handKey)) {
+            await this.gameBoard3D.animateCardDeal(handKey, duration);
+        } else if (this.gameBoard3D.cards.has(runtimeId)) {
+            await this.gameBoard3D.animateCardDeal(runtimeId, duration);
+        }
+    }
+
+    /**
+     * カードドローアニメーション
+     */
+    async animateDrawCard(runtimeId, duration = 400) {
+        if (!this.gameBoard3D) return;
+        const handKey = `hand-${runtimeId}`;
+        if (this.gameBoard3D.cards.has(handKey)) {
+            await this.gameBoard3D.animateCardDraw(handKey, duration);
+        } else if (this.gameBoard3D.cards.has(runtimeId)) {
+            await this.gameBoard3D.animateCardDraw(runtimeId, duration);
+        }
+    }
+
+    /**
+     * カードプレイアニメーション
+     */
+    async animatePlayCard(runtimeId, duration = 400) {
+        if (!this.gameBoard3D) return;
+        const handKey = `hand-${runtimeId}`;
+        if (this.gameBoard3D.cards.has(handKey)) {
+            await this.gameBoard3D.animateCardPlay(handKey, duration);
+        } else if (this.gameBoard3D.cards.has(runtimeId)) {
+            await this.gameBoard3D.animateCardPlay(runtimeId, duration);
+        }
+    }
+
+    /**
+     * カードをアクティブに移動するアニメーション
+     */
+    async animateCardToActive(runtimeId, duration = 400) {
+        if (!this.gameBoard3D) return;
+        await this.gameBoard3D.animateCardToActive(runtimeId, duration);
+    }
+
+    /**
+     * カードをベンチに移動するアニメーション
+     */
+    async animateCardToBench(runtimeId, duration = 400) {
+        if (!this.gameBoard3D) return;
+        await this.gameBoard3D.animateCardToBench(runtimeId, duration);
+    }
+
+    /**
+     * 進化アニメーション
+     */
+    async animateEvolution(runtimeId, duration = 800) {
+        if (!this.gameBoard3D) return;
+        await this.gameBoard3D.animateCardEvolution(runtimeId, duration);
+    }
+
+    /**
+     * エネルギーアタッチアニメーション
+     */
+    async animateEnergyAttach(runtimeId, duration = 600) {
+        if (!this.gameBoard3D) return;
+        await this.gameBoard3D.animateCardEnergyAttach(runtimeId, duration);
+    }
+
+    /**
+     * 回復グローアニメーション
+     */
+    async animateHeal(runtimeId, duration = 400) {
+        if (!this.gameBoard3D) return;
+        await this.gameBoard3D.animateCardHeal(runtimeId, duration);
+    }
+
+    /**
+     * サイドカード取得アニメーション
+     */
+    async animatePrizeTake(runtimeId, duration = 400) {
+        if (!this.gameBoard3D) return;
+        const prizeKey = `prize-${runtimeId}`;
+        if (this.gameBoard3D.cards.has(prizeKey)) {
+            await this.gameBoard3D.animateCardPrizeTake(prizeKey, duration);
+        } else if (this.gameBoard3D.cards.has(runtimeId)) {
+            await this.gameBoard3D.animateCardPrizeTake(runtimeId, duration);
+        }
+    }
+
+    // ==========================================
+    // 特殊状態API
+    // ==========================================
+
+    /**
+     * カードの特殊状態を設定
+     */
+    setCardCondition(runtimeId, condition, enabled) {
+        if (!this.gameBoard3D) return;
+        this.gameBoard3D.setCardCondition(runtimeId, condition, enabled);
+    }
+
+    /**
+     * タイプ別グロー効果を設定
+     */
+    setCardTypeGlow(runtimeId, type) {
+        if (!this.gameBoard3D) return;
+        this.gameBoard3D.setCardTypeGlow(runtimeId, type);
+    }
+
+    /**
+     * タイプ別グロー効果を解除
+     */
+    clearCardTypeGlow(runtimeId) {
+        if (!this.gameBoard3D) return;
+        this.gameBoard3D.clearCardTypeGlow(runtimeId);
+    }
+
+    /**
      * クリーンアップ
      */
     dispose() {
