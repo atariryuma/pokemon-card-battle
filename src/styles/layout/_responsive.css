@@ -1,0 +1,238 @@
+/* ==========================================
+   レスポンシブデザイン
+   ========================================== */
+
+/* タブレット横向き / 小型デスクトップ */
+@media (max-width: 1200px) {
+    :root {
+        --hand-card-width: clamp(60px, 10vw, 100px);
+        --hand-card-height: clamp(84px, 14vw, 140px);
+        --hand-gap: clamp(3px, 0.5vw, 8px);
+        --playmat-size: min(70vh, 90vw);
+    }
+
+    #game-status-panel {
+        width: clamp(200px, 25vw, 280px);
+    }
+}
+
+/* タブレット縦向き */
+@media (max-width: 768px) {
+    :root {
+        --hand-card-width: clamp(55px, 14vw, 85px);
+        --hand-card-height: clamp(77px, 19.6vw, 119px);
+        --hand-gap: clamp(2px, 0.4vw, 6px);
+        --playmat-size: min(60vh, 95vw);
+    }
+
+    .cpu-hand-independent {
+        width: clamp(320px, 80vw, 500px) !important;
+        height: clamp(80px, 12vh, 110px) !important;
+    }
+
+    #game-status-panel {
+        width: clamp(180px, 40vw, 260px);
+        top: auto;
+        bottom: clamp(200px, 35vh, 280px);
+        right: 8px;
+        max-height: 45vh;
+    }
+
+    .game-footer {
+        height: clamp(45px, 8vh, 70px);
+    }
+
+    .central-modal-content {
+        margin: 1rem;
+        max-width: calc(100vw - 2rem);
+    }
+
+    .toast-container {
+        top: 1rem;
+        right: 1rem;
+        left: 1rem;
+        max-width: calc(100vw - 2rem);
+    }
+
+    .toast-item {
+        margin-bottom: 0.5rem;
+        padding: 0.875rem;
+        font-size: 0.9rem;
+    }
+
+    .pokemon-action-btn {
+        padding: 12px 18px;
+        font-size: 0.85rem;
+        min-width: 130px;
+    }
+
+    .battle-right-panel {
+        flex: 1 1 100%;
+        max-width: 100%;
+        margin-top: 1rem;
+    }
+
+    .battle-left-panel {
+        min-width: 0;
+        flex: 1;
+    }
+
+    .opponent-card-display {
+        width: min(250px, 85vw);
+        height: min(250px, 45vh);
+    }
+
+    .battle-modal-container {
+        flex-direction: column;
+        gap: 20px;
+        max-width: calc(100vw - 2rem);
+    }
+}
+
+/* スマートフォン */
+@media (max-width: 480px) {
+    :root {
+        --hand-card-width: clamp(48px, 18vw, 70px);
+        --hand-card-height: clamp(67px, 25.2vw, 98px);
+        --hand-gap: clamp(1px, 0.3vw, 4px);
+        --playmat-size: min(55vh, 98vw);
+    }
+
+    .cpu-hand-independent {
+        width: clamp(280px, 90vw, 400px) !important;
+        height: clamp(70px, 11vh, 95px) !important;
+        top: 8px !important;
+    }
+
+    #player-hand-container {
+        height: clamp(120px, 18vh, 160px);
+        margin-bottom: 8px;
+    }
+
+    #game-status-panel {
+        width: clamp(160px, 50vw, 220px);
+        font-size: 0.7rem;
+        padding: 0.3rem;
+    }
+
+    .pokemon-action-btn {
+        padding: 10px 14px;
+        font-size: 0.8rem;
+        min-width: 110px;
+    }
+
+    .game-footer {
+        height: clamp(40px, 7vh, 60px);
+    }
+
+    .toast-container {
+        top: 0.5rem;
+        right: 0.5rem;
+        left: 0.5rem;
+        max-width: calc(100vw - 1rem);
+    }
+
+    .toast-item {
+        margin-bottom: 0.4rem;
+        padding: 0.75rem;
+        font-size: 0.8rem;
+    }
+
+    .pokemon-action-btn {
+        padding: 10px 14px;
+        font-size: 0.8rem;
+        min-width: 110px;
+    }
+
+    .opponent-card-display {
+        width: min(200px, 75vw);
+        height: min(280px, 45vh);
+    }
+
+    .battle-modal-container {
+        gap: 12px;
+        max-width: calc(100vw - 1rem);
+        margin: 0.5rem;
+    }
+}
+
+/* 大画面デスクトップ / 4K */
+@media (min-width: 1920px) {
+    :root {
+        --hand-card-width: clamp(100px, 7vw, 150px);
+        --hand-card-height: clamp(140px, 9.8vw, 210px);
+        --hand-gap: clamp(6px, 0.8vw, 14px);
+        --playmat-size: min(80vh, 75vw);
+    }
+
+    .cpu-hand-independent {
+        width: clamp(600px, 50vw, 900px) !important;
+        height: clamp(130px, 14vh, 180px) !important;
+    }
+
+    #game-status-panel {
+        width: clamp(280px, 18vw, 380px);
+    }
+}
+
+/* 縦長画面（スマホ縦向き）の特別対応 */
+@media (max-aspect-ratio: 3/4) {
+    :root {
+        --playmat-size: min(50vh, 95vw);
+    }
+
+    #game-stage {
+        padding-top: clamp(12vh, 15vh, 18vh);
+    }
+
+    #game-status-panel {
+        position: fixed;
+        top: auto;
+        bottom: clamp(180px, 30vh, 250px);
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        width: clamp(240px, 70vw, 320px);
+        max-height: 30vh;
+    }
+}
+
+/* 横長ワイド画面の特別対応 */
+@media (min-aspect-ratio: 21/9) {
+    :root {
+        --playmat-size: min(85vh, 60vw);
+    }
+
+    .cpu-hand-independent {
+        width: clamp(500px, 45vw, 800px) !important;
+    }
+}
+
+/* 高コントラストモード対応 */
+@media (prefers-contrast: high) {
+    .central-modal-content {
+        border: 2px solid #ffffff;
+        background: #000000;
+    }
+
+    .toast-item {
+        border: 2px solid #ffffff;
+    }
+}
+
+/* アニメーション無効化対応 */
+@media (prefers-reduced-motion: reduce) {
+    .modal-enter,
+    .modal-exit,
+    .toast-enter,
+    .toast-exit,
+    .hud-enter {
+        animation: none;
+    }
+
+    .central-modal-content,
+    .toast-item,
+    .action-hud {
+        transition: none;
+    }
+}

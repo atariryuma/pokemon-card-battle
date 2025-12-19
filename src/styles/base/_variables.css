@@ -1,17 +1,116 @@
-/**
- * CSS変数定義 - 新規追加のみ
- * 
- * 注: 既存の変数は index.html の :root で定義済み
- * このファイルは新しいモジュールCSS用の追加変数のみ
- */
+/* ==========================================
+   UI/UX デザインシステム - CSS Variables
+   ========================================== */
 
 :root {
-   /* イベント委譲用追加変数（既存に追加） */
-   --color-hover-glow: rgba(255, 215, 0, 0.5);
-   --color-slot-bg: rgba(0, 0, 0, 0.3);
-   --color-slot-border: rgba(255, 255, 255, 0.2);
+    /* === タッチターゲット（WCAG 2.2準拠: 最小44px） === */
+    --touch-target-min: 44px;
+    --touch-target-comfortable: 48px;
+    --touch-target-large: 56px;
 
-   /* トランジション */
-   --transition-fast: 200ms ease;
-   --transition-normal: 300ms ease;
+    /* === スペーシングシステム（8pxグリッド） === */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 32px;
+    --spacing-2xl: 48px;
+
+    /* === タイポグラフィスケール === */
+    --font-size-xs: 0.75rem;   /* 12px */
+    --font-size-sm: 0.875rem;  /* 14px */
+    --font-size-base: 1rem;    /* 16px */
+    --font-size-lg: 1.125rem;  /* 18px */
+    --font-size-xl: 1.25rem;   /* 20px */
+    --font-size-2xl: 1.5rem;   /* 24px */
+
+    /* === カラーシステム（コントラスト比4.5:1以上） === */
+    --color-primary: #FCD34D;
+    --color-primary-hover: #FDE68A;
+    --color-primary-active: #F59E0B;
+    --color-secondary: #3B82F6;
+    --color-secondary-hover: #60A5FA;
+    --color-danger: #EF4444;
+    --color-success: #22C55E;
+    --color-warning: #F59E0B;
+
+    /* === フォーカス表示（アクセシビリティ） === */
+    --focus-ring-color: rgba(59, 130, 246, 0.8);
+    --focus-ring-width: 3px;
+    --focus-ring-offset: 2px;
+
+    /* === シャドウシステム（深度表現） === */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 10px 20px rgba(0, 0, 0, 0.2);
+    --shadow-xl: 0 20px 40px rgba(0, 0, 0, 0.25);
+    --shadow-glow: 0 0 20px rgba(252, 211, 77, 0.4);
+
+    /* === トランジション（パフォーマンス最適化） === */
+    --transition-fast: 100ms ease-out;
+    --transition-normal: 200ms ease-out;
+    --transition-slow: 300ms ease-out;
+    --transition-spring: 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* === ボーダー半径 === */
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+    --radius-full: 9999px;
+
+    /* === レイアウト用変数 === */
+    --side-padding: 16px;
+    --card-height: clamp(120px, 22vh, 180px);
+    --hand-extra-gap: 24px;
+    --hand-height: calc(var(--card-height) + var(--hand-extra-gap));
+    --vertical-gap: 8px;
+    --overlap-cpu: clamp(8px, 2.5vh, 20px);
+    --overlap-player: clamp(16px, 4vh, 36px);
+    --footer-height: 80px;
+    --board-margin-y: 0.5vh;
+
+    /* === 動的手札サイズ（ディスプレイ対応） === */
+    --card-width: clamp(65px, min(9vw, 7vh), 110px);
+    --hand-card-width: clamp(70px, min(11vw, 10vh), 130px);
+    --hand-card-height: clamp(98px, min(15.4vw, 14vh), 182px);
+    --hand-gap: clamp(4px, 0.6vw, 10px);
+
+    /* === プレイマット設定 === */
+    --playmat-size: min(72vh, 80vw);
+
+    /* === アニメーションタイミング変数 === */
+    --anim-fast: 200ms;
+    --anim-normal: 400ms;
+    --anim-slow: 800ms;
+    --anim-combat: 600ms;
+    --anim-ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+    --anim-ease-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    --anim-ease-smooth: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --anim-enabled: 1;
+    --anim-particles: 1;
+    --shake-intensity: 1;
+
+    /* === ビューポート余白 === */
+    --viewport-padding: 8px;
+
+    /* === Z-Index統一管理システム === */
+    --z-board-bg: 1;
+    --z-board: 10;
+    --z-deck-effects: 11;
+    --z-placeholder: 12;
+    --z-hand-area: 20;
+    --z-hand: 30;
+    --z-cpu-hand-base: 40;
+    --z-hand-hover: 50;
+    --z-card-hover: 60;
+    --z-highlight: 70;
+    --z-selected: 80;
+    --z-card-effects: 90;
+    --z-deck-hover: 100;
+    --z-floating-hud: 200;
+    --z-panels: 300;
+    --z-animations: 400;
+    --z-modals: 500;
+    --z-toast: 600;
 }

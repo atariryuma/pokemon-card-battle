@@ -1,35 +1,21 @@
-/**
- * メインCSSエントリーポイント
- * 
- * すべてのCSSモジュールをインポート
- * このファイルを index.html で読み込む
- */
-
 /* ==========================================
-   1. Base - 基盤スタイル
+   Pokemon Card Battle - Main CSS
+   統合スタイルシート
    ========================================== */
-@import './base/_variables.css';
-@import './base/_reset.css';
 
-/* ==========================================
-   2. Layout - レイアウト
-   ========================================== */
-@import './layout/_game-board.css';
-@import './layout/_hand-area.css';
+/* 1. ベース - 変数とリセット */
+@import url('./base/_variables.css');
+@import url('./base/_reset.css');
 
-/* ==========================================
-   3. Components - コンポーネント
-   ========================================== */
-@import './components/_card-slot.css';
-@import './components/_deck.css';
-@import './components/_prize.css';
+/* 2. レイアウト */
+@import url('./layout/_game-board.css');
+@import url('./layout/_hand-area.css');
+@import url('./layout/_responsive.css');
 
-/* ==========================================
-   4. Animations - アニメーション
-   ========================================== */
-@import './animations/_keyframes.css';
+/* 3. コンポーネント */
+@import url('./components/_card.css');
+@import url('./components/_buttons.css');
+@import url('./components/_modal.css');
 
-/* ==========================================
-   5. 既存の z-index-vars.css との統合
-   ========================================== */
-/* 注: z-index-vars.css は既存のまま維持 */
+/* 4. アニメーション */
+@import url('./animations/_keyframes.css');

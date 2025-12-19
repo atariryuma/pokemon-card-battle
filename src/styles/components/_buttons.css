@@ -1,0 +1,94 @@
+/* ==========================================
+   ボタンコンポーネント
+   ========================================== */
+
+.pokemon-action-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: clamp(8px, 1vw, 12px);
+    min-height: var(--touch-target-min);
+    padding: clamp(12px, 1.5vh, 16px) clamp(16px, 2vw, 24px);
+    background: linear-gradient(135deg,
+            var(--color-primary) 0%,
+            var(--color-primary-active) 50%,
+            #D97706 100%);
+    border: 2px solid #DC2626;
+    border-radius: var(--radius-xl);
+    color: #1F2937;
+    font-weight: 700;
+    font-size: clamp(0.8rem, 1.2vw, 0.95rem);
+    cursor: pointer;
+    transition:
+        transform var(--transition-spring),
+        box-shadow var(--transition-normal),
+        background var(--transition-normal);
+    box-shadow: var(--shadow-md), var(--shadow-glow);
+    backdrop-filter: blur(8px);
+    min-width: clamp(120px, 16vw, 160px);
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+.pokemon-action-btn:hover {
+    transform: translateY(-4px) scale(1.03);
+    box-shadow:
+        var(--shadow-lg),
+        0 0 24px rgba(252, 211, 77, 0.5);
+    background: linear-gradient(135deg,
+            var(--color-primary-hover) 0%,
+            var(--color-primary) 50%,
+            var(--color-primary-active) 100%);
+}
+
+.pokemon-action-btn:active {
+    transform: translateY(1px) scale(0.98);
+    box-shadow: var(--shadow-sm), 0 0 8px rgba(252, 211, 77, 0.3);
+    transition: transform 50ms ease-out, box-shadow 50ms ease-out;
+}
+
+.pokemon-action-btn:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+    box-shadow: var(--shadow-md), 0 0 0 4px rgba(59, 130, 246, 0.3);
+}
+
+.pokemon-action-btn:disabled,
+.pokemon-action-btn[disabled] {
+    opacity: 0.65;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: var(--shadow-sm);
+    filter: grayscale(30%);
+}
+
+.pokemon-btn-icon {
+    font-size: 1.3rem;
+    filter: drop-shadow(1px 1px 2px rgba(0, 0, 0, 0.3));
+    transition: transform var(--transition-spring);
+}
+
+.pokemon-action-btn:hover .pokemon-btn-icon {
+    transform: scale(1.15);
+}
+
+.pokemon-action-btn:active .pokemon-btn-icon {
+    transform: scale(0.95);
+}
+
+.pokemon-btn-text {
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.15);
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.pokemon-action-btn.show {
+    animation: slideInRight var(--anim-fast) ease-out forwards;
+}
+
+.pokemon-action-btn.hide {
+    animation: slideOutRight var(--anim-fast) ease-in forwards;
+}

@@ -1,14 +1,118 @@
-/**
- * リセットCSS - 最小限のブラウザ正規化
- * 
- * 注: body のスタイルは index.html で定義済み
- * このファイルは user-select 防止のみ追加
- */
+/* ==========================================
+   グローバルリセット・アクセシビリティ
+   ========================================== */
 
-/* ゲーム中のテキスト選択を防止（追加のみ） */
+/* === グローバルフォーカススタイル（アクセシビリティ） === */
+*:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+}
+
+/* マウスユーザーはフォーカスリングを非表示 */
+*:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* === モーション低減設定（アクセシビリティ） === */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    /* 必要最低限のトランジションのみ維持 */
+    .pokemon-action-btn,
+    .hand-slot,
+    .card-slot {
+        transition: opacity 0.1s ease !important;
+    }
+}
+
+/* === ハイコントラストモード対応 === */
+@media (prefers-contrast: high) {
+    :root {
+        --color-primary: #FFD700;
+        --color-secondary: #00BFFF;
+        --color-danger: #FF4444;
+        --color-success: #00FF00;
+        --focus-ring-width: 4px;
+    }
+
+    .pokemon-action-btn {
+        border-width: 3px;
+    }
+
+    .card-slot,
+    .hand-slot {
+        border: 2px solid rgba(255, 255, 255, 0.5);
+    }
+}
+
+/* === Body基本スタイル === */
 body {
+    margin: 0;
+    padding: 0 var(--side-padding);
+    font-family: 'Inter', 'Noto Sans JP', sans-serif;
+    background: linear-gradient(135deg, #16222A 0%, #3A6073 100%);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    min-height: 100vh;
+    gap: calc(var(--vertical-gap) / 2);
+    /* スムーズなフォントレンダリング */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* ゲーム中のテキスト選択を防止 */
     user-select: none;
     -webkit-user-select: none;
     -moz-user-select: none;
     -ms-user-select: none;
+    /* タッチ操作最適化 */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+}
+
+/* === ボタン基本スタイル === */
+button {
+    backdrop-filter: blur(5px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease-in-out;
+}
+
+button:hover {
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* === ユーティリティクラス === */
+.is-hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* === パフォーマンス最適化 - 低品質モード === */
+@media (prefers-reduced-motion: reduce) {
+    :root {
+        --anim-enabled: 0;
+        --anim-fast: 0ms;
+        --anim-normal: 0ms;
+        --anim-slow: 0ms;
+        --anim-combat: 0ms;
+    }
+
+    * {
+        animation-duration: 0ms !important;
+        animation-delay: 0ms !important;
+        transition-duration: 0ms !important;
+        transition-delay: 0ms !important;
+    }
 }

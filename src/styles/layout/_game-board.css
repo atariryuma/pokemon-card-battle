@@ -1,17 +1,311 @@
-/**
- * ゲームボード - イベント委譲用スタイルのみ
- * 
- * 位置・レイアウトは index.html の既存CSSを使用
- * このファイルは pointer-events の制御のみ担当
- */
+/* ==========================================
+   ゲームボード・ステージレイアウト
+   ========================================== */
 
-/* プレイヤーボード - イベント委譲（ボード自体はクリック不可） */
-.player-board {
+.game-wrapper {
+    display: grid;
+    grid-template-rows: 1fr auto auto;
+    grid-template-areas:
+        "game-board"
+        "hud"
+        "player-hand";
+    height: 100vh;
+    width: 100vw;
+    padding: var(--viewport-padding);
+    box-sizing: border-box;
+    gap: var(--viewport-padding);
+    -webkit-box-sizing: border-box;
+    overflow: visible;
+    position: relative;
+    z-index: 10;
     pointer-events: none;
-    /* 子要素のみクリック可能 */
 }
 
-/* カードスロット - クリック可能 */
-.player-board .card-slot {
+#game-stage {
+    grid-area: game-board;
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    min-height: 0;
+    z-index: var(--z-board);
+    padding-top: clamp(4vh, 6vh, 8vh);
+    pointer-events: none;
+}
+
+#game-board {
+    transform: none;
+    position: relative;
+    width: var(--playmat-size);
+    height: var(--playmat-size);
+    aspect-ratio: 1;
+    margin: 0 auto;
+    overflow: visible;
     pointer-events: auto;
+    user-select: none;
+    -webkit-user-select: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+body.game-ready #game-board {
+    opacity: 1;
+}
+
+body.three-active #game-board {
+    visibility: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+}
+
+body.three-active #three-container {
+    pointer-events: auto;
+}
+
+/* Three.js Container - Fixed Background */
+#three-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1;
+    pointer-events: auto;
+}
+
+/* 背景画像用のレイヤー */
+.board-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    z-index: var(--z-board-bg);
+    pointer-events: none !important;
+    filter: contrast(1.05) brightness(1.02);
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: visible;
+    -webkit-backface-visibility: visible;
+}
+
+.player-board {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-board);
+    pointer-events: none;
+}
+
+/* プレイヤーフィールド（下部） */
+.player-board.player-self {
+    z-index: var(--z-board) !important;
+    bottom: 0;
+}
+
+.player-board.player-self .card-slot {
+    pointer-events: auto !important;
+    z-index: var(--z-board) !important;
+}
+
+/* 相手フィールド（上部） */
+.player-board.opponent-board {
+    z-index: var(--z-board) !important;
+}
+
+.player-board.opponent-board .card-slot {
+    pointer-events: auto !important;
+    z-index: var(--z-board) !important;
+}
+
+/* Game Footer with HUD */
+.game-footer {
+    grid-area: hud;
+    height: clamp(50px, 7vh, 80px);
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 16px;
+    background: transparent;
+    pointer-events: auto;
+}
+
+/* 統合されたFloating Action HUD */
+#floating-action-hud {
+    position: static;
+    margin: 0 auto;
+    width: 100%;
+    max-width: 700px;
+    z-index: var(--z-floating-hud);
+    transform-origin: center;
+    animation: fadeInScale var(--anim-normal) ease-out;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: clamp(8px, 1.5vw, 16px);
+    justify-content: center;
+    align-items: center;
+    padding: 0 8px;
+    pointer-events: auto;
+}
+
+/* ゲームステージ3Dシーン */
+.game-stage {
+    perspective: 1200px;
+    transform-style: preserve-3d;
+    position: relative;
+}
+
+/* Game Status Panel */
+#game-status-panel {
+    color: #fff;
+    padding: clamp(0.4rem, 1.5vw, 0.8rem);
+    font-size: clamp(0.75rem, 1.3vw, 0.95rem);
+    width: clamp(220px, 22vw, 300px);
+    min-height: auto;
+    max-height: 60vh;
+    height: auto;
+    position: fixed;
+    top: clamp(12px, 2vh, 20px);
+    right: clamp(12px, 2vw, 20px);
+    z-index: var(--z-panels);
+    overflow-y: auto;
+    opacity: 0.95;
+    transition: opacity 0.2s ease;
+    pointer-events: auto;
+}
+
+#game-status-panel:hover {
+    opacity: 1;
+}
+
+.status-panel-content {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(135deg,
+            rgba(220, 38, 38, 0.9) 0%,
+            rgba(239, 68, 68, 0.95) 30%,
+            rgba(59, 130, 246, 0.9) 70%,
+            rgba(37, 99, 235, 0.95) 100%);
+    border: 3px solid #FCD34D;
+    border-radius: 20px;
+    box-shadow:
+        0 25px 50px rgba(0, 0, 0, 0.5),
+        0 0 30px rgba(252, 211, 77, 0.4),
+        inset 0 2px 4px rgba(255, 255, 255, 0.2),
+        inset 0 -2px 4px rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(15px);
+    position: relative;
+}
+
+.status-panel-content::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    width: 20px;
+    height: 20px;
+    background: radial-gradient(circle,
+            #ffffff 0%, #ffffff 30%,
+            #000000 30%, #000000 50%,
+            #dc2626 50%, #dc2626 100%);
+    border-radius: 50%;
+    border: 2px solid #FCD34D;
+    z-index: var(--z-board-bg);
+}
+
+.status-panel-header {
+    padding: clamp(10px, 1.5vh, 14px) clamp(12px, 2vw, 18px) clamp(8px, 1vh, 12px);
+    border-bottom: 2px solid rgba(252, 211, 77, 0.5);
+    background: linear-gradient(135deg,
+            rgba(255, 255, 255, 0.12) 0%,
+            rgba(252, 211, 77, 0.08) 50%,
+            rgba(255, 255, 255, 0.08) 100%);
+    border-radius: 18px 18px 0 0;
+    position: relative;
+}
+
+.status-panel-body {
+    flex: 1;
+    padding: clamp(10px, 1.5vh, 14px) clamp(12px, 2vw, 18px);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(8px, 1.2vh, 12px);
+}
+
+.status-info-section {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: clamp(8px, 1.2vh, 12px) clamp(10px, 1.5vw, 14px);
+    border: 1px solid rgba(252, 211, 77, 0.25);
+    box-shadow:
+        0 3px 6px rgba(0, 0, 0, 0.15),
+        inset 0 1px 2px rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(4px);
+}
+
+.status-info-title {
+    font-size: var(--font-size-xs);
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.9);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: var(--spacing-xs);
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.status-info-value {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    color: #FFFFFF;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+    font-variant-numeric: tabular-nums;
+}
+
+.game-message-area {
+    background: rgba(0, 0, 0, 0.45);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    border: 1px solid rgba(252, 211, 77, 0.35);
+    min-height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    transition: background-color var(--transition-normal);
+}
+
+.game-message-area:has(.game-message-text:not(:empty)) {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.game-message-text {
+    font-size: var(--font-size-sm);
+    line-height: 1.5;
+    color: #FFFFFF;
+    text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9);
+    font-weight: 500;
+    animation: messageAppear var(--transition-normal) ease-out;
+}
+
+@keyframes messageAppear {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Stadium special styling */
+.stadium-zone {
+    z-index: var(--z-board);
+    background-color: rgba(75, 0, 130, 0.15);
+    border-color: rgba(147, 51, 234, 0.3);
+    transform: translateZ(1px);
 }

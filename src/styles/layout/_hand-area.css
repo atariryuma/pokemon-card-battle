@@ -1,9 +1,267 @@
-/**
- * 手札エリア - イベント委譲用スタイルのみ
- * 
- * 位置・レイアウトは index.html の既存CSSを使用
- * このファイルは pointer-events の制御のみ担当
- */
+/* ==========================================
+   手札エリアレイアウト
+   ========================================== */
 
-/* 手札エリアはクリック可能（既存CSSと競合しないよう最小限に） */
-/* 注: レイアウト/位置は index.html で定義済み */
+/* CPU手札 - 独立配置システム */
+.cpu-hand-independent {
+    position: fixed;
+    top: clamp(10px, 2vh, 24px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: clamp(400px, 60vw, 700px);
+    height: clamp(100px, 15vh, 140px);
+    z-index: var(--z-cpu-hand-base);
+    pointer-events: none;
+    overflow: visible;
+    background: transparent;
+    padding: 8px 0;
+    transform-style: flat;
+}
+
+.cpu-hand-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: clamp(4px, 0.8vw, 12px);
+    padding: 0 clamp(16px, 3vw, 40px);
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+/* CPU手札のhand-slotクラス */
+#cpu-hand {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 4px;
+    pointer-events: none;
+    transform: none;
+    transform-style: flat;
+    transform-origin: center bottom;
+    z-index: var(--z-cpu-hand-base);
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    padding: 0 20px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+}
+
+#cpu-hand.cpu-hand-scaling {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 4px;
+    pointer-events: none;
+    transform: none;
+    transform-style: flat;
+    transform-origin: center bottom;
+    z-index: var(--z-cpu-hand-base);
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    padding: 0 20px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+}
+
+#cpu-hand .hand-slot {
+    width: calc(var(--hand-card-width) * 0.85);
+    height: calc(var(--hand-card-height) * 0.85);
+    border-radius: var(--radius-md);
+    background-color: rgba(25, 25, 35, 0.95);
+    border: 2px solid rgba(255, 215, 0, 0.4);
+    z-index: var(--z-cpu-hand-base);
+    pointer-events: auto;
+    position: relative;
+    flex-shrink: 0;
+    display: flex;
+    visibility: visible;
+    opacity: 1;
+    transform-origin: bottom center;
+    transform-style: flat;
+    transition: transform var(--transition-normal), box-shadow 0.2s ease, border 0.2s ease;
+    box-shadow: var(--shadow-md);
+}
+
+#cpu-hand.hand-dock .hand-slot.hand-card {
+    transition: transform 140ms ease, filter 140ms ease, z-index 140ms ease !important;
+    will-change: transform !important;
+    transform-origin: bottom center !important;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
+    position: relative;
+    z-index: var(--z-highlight);
+}
+
+#cpu-hand .hand-slot.active {
+    transform: translateY(-8px) scale(1.05);
+    box-shadow: 0 8px 25px rgba(255, 215, 0, 0.6);
+    border: 2px solid #ffd700;
+}
+
+#cpu-hand .hand-slot:hover:not(.active) {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* プレイヤー手札エリア */
+#player-hand-container {
+    grid-area: player-hand;
+    height: clamp(220px, 32vh, 320px);
+    max-height: 320px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    position: relative;
+    z-index: var(--z-hand-area);
+    margin-bottom: 0;
+    overflow: visible;
+    pointer-events: none;
+}
+
+#player-hand-container #player-hand,
+#player-hand-container .hand-slot {
+    pointer-events: auto;
+}
+
+#player-hand {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    flex-wrap: nowrap;
+    gap: var(--hand-gap);
+    pointer-events: auto;
+    transform: none !important;
+    transform-style: flat !important;
+    z-index: var(--z-hand);
+    position: relative !important;
+    margin: 0 auto;
+    box-sizing: border-box;
+    left: auto !important;
+    top: auto !important;
+}
+
+#player-hand .hand-slot {
+    pointer-events: auto;
+    cursor: pointer;
+    transform-style: flat !important;
+    backface-visibility: visible;
+    will-change: auto;
+    width: var(--hand-card-width);
+    height: var(--hand-card-height);
+    margin: 0;
+    transition: all 0.2s ease;
+}
+
+#player-hand .hand-slot.active {
+    transform: translateY(-15px) scale(1.05) !important;
+    box-shadow: 0 8px 25px rgba(255, 215, 0, 0.6);
+    border: 2px solid #ffd700;
+    z-index: calc(var(--z-hand) + 10);
+}
+
+/* Hand Dock (Mac Dock-like magnification) */
+#player-hand.hand-dock {
+    -webkit-user-select: none;
+    user-select: none;
+    contain: layout paint;
+    overflow: visible;
+    pointer-events: auto;
+    z-index: var(--z-hand);
+    transform: none;
+    will-change: auto;
+    position: relative;
+    width: 100%;
+    max-width: 90vw;
+    margin: 0 auto;
+    max-height: 250px !important;
+    height: clamp(180px, 25vh, 250px) !important;
+    min-height: 180px !important;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    gap: var(--hand-gap);
+}
+
+.hand-slot {
+    transition:
+        transform var(--transition-spring),
+        box-shadow var(--transition-normal),
+        border var(--transition-fast),
+        filter var(--transition-normal);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    will-change: transform;
+}
+
+.hand-slot.active {
+    transform: translateY(-12px) scale(1.08);
+    box-shadow:
+        0 12px 30px rgba(255, 215, 0, 0.5),
+        0 0 0 3px var(--color-primary),
+        inset 0 0 20px rgba(255, 215, 0, 0.1);
+    border: 2px solid var(--color-primary);
+    filter: brightness(1.1);
+    z-index: calc(var(--z-hand) + 20);
+}
+
+.hand-slot:hover:not(.active) {
+    transform: translateY(-6px) scale(1.04);
+    box-shadow:
+        0 8px 20px rgba(0, 0, 0, 0.35),
+        0 0 15px rgba(255, 255, 255, 0.1);
+    filter: brightness(1.05);
+}
+
+.hand-slot:active:not(.active) {
+    transform: translateY(-2px) scale(1.02);
+    transition: transform 50ms ease-out;
+}
+
+.hand-slot:focus-visible {
+    outline: var(--focus-ring-width) solid var(--focus-ring-color);
+    outline-offset: var(--focus-ring-offset);
+}
+
+#player-hand.hand-dock .hand-slot.hand-card {
+    transition: transform 140ms ease, filter 140ms ease, z-index 140ms ease !important;
+    will-change: transform !important;
+    transform-origin: bottom center !important;
+    filter: drop-shadow(0 8px 15px rgba(0, 0, 0, 0.4));
+    position: relative;
+    z-index: var(--z-highlight);
+}
+
+/* 手札カードの表示を強制 */
+.hand-card {
+    opacity: 1;
+    visibility: visible;
+    display: flex;
+}
+
+/* アニメーション準備中のカードを初期状態で非表示にする */
+.is-preparing-animation .relative {
+    opacity: 0;
+    transition: none;
+}
+
+/* 手札プレースホルダーのスケール時の特別対応 */
+.hand-slot.has-placeholder .card-placeholder {
+    font-size: max(0.6rem, min(0.8rem, calc(1.2rem / var(--current-scale, 1))));
+}
+
+/* GPU加速手札インタラクション最適化 */
+#player-hand.hand-dock .hand-slot.hand-card img {
+    pointer-events: var(--interaction-events);
+    cursor: var(--interaction-cursor);
+    will-change: var(--performance-will-change);
+}
+
+#player-hand.hand-dock .hand-slot.hand-card {
+    transform: var(--gpu-layer) translateY(-5px) scale(0.95);
+    will-change: var(--performance-will-change);
+}

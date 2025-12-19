@@ -1,0 +1,392 @@
+/* ==========================================
+   モーダル・通知システム
+   ========================================== */
+
+/* 中央モーダル - 重要な意思決定用 */
+.central-modal {
+    z-index: var(--z-modals);
+    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.75);
+}
+
+.central-modal-content {
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.98), rgba(17, 24, 39, 0.98));
+    border: 1px solid rgba(75, 85, 99, 0.5);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.7), 0 0 30px rgba(77, 208, 253, 0.3);
+    backdrop-filter: blur(10px);
+    max-width: 90vw;
+    max-height: 85vh;
+    overflow-y: auto;
+    word-wrap: break-word;
+}
+
+.central-modal-content:hover {
+    border-color: rgba(77, 208, 253, 0.6);
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.8), 0 0 40px rgba(77, 208, 253, 0.4);
+}
+
+/* 通知トースト - 右上自動消失 */
+.toast-container {
+    z-index: var(--z-toast);
+    pointer-events: none;
+    position: fixed;
+    bottom: 180px;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100vw - 2rem);
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+}
+
+.toast-item {
+    pointer-events: auto;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    max-width: 100%;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    min-width: 0;
+}
+
+.toast-success {
+    background: linear-gradient(135deg, rgba(34, 197, 94, 0.9), rgba(21, 128, 61, 0.9));
+    border-left: 4px solid #10b981;
+}
+
+.toast-warning {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.9), rgba(217, 119, 6, 0.9));
+    border-left: 4px solid #f59e0b;
+}
+
+.toast-error {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.9), rgba(185, 28, 28, 0.9));
+    border-left: 4px solid #ef4444;
+}
+
+.toast-info {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(29, 78, 216, 0.9));
+    border-left: 4px solid #3b82f6;
+}
+
+/* アクションHUD - コンテキスト依存UI */
+.action-hud {
+    z-index: var(--z-floating-hud);
+    background: linear-gradient(135deg, rgba(31, 41, 55, 0.95), rgba(17, 24, 39, 0.95));
+    border: 1px solid rgba(75, 85, 99, 0.6);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4), 0 0 20px rgba(77, 208, 253, 0.2);
+    pointer-events: none;
+}
+
+.action-hud::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    right: -1px;
+    bottom: -1px;
+    background: linear-gradient(45deg, transparent, rgba(77, 208, 253, 0.3), transparent);
+    border-radius: inherit;
+    z-index: var(--z-toast);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.action-hud:hover::before {
+    opacity: 1;
+}
+
+/* Battle Modal Layout */
+.battle-modal-container {
+    display: flex;
+    gap: 24px;
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.battle-left-panel {
+    flex: 1;
+    min-width: 500px;
+}
+
+.battle-right-panel {
+    flex: 0 0 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-width: calc(100vw - 2rem);
+    min-width: 0;
+    z-index: var(--z-panels);
+}
+
+.opponent-card-display {
+    position: relative;
+    width: min(280px, 90vw);
+    height: min(392px, 60vh);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(147, 51, 234, 0.1));
+    border: 2px solid rgba(59, 130, 246, 0.3);
+    aspect-ratio: 5/7;
+}
+
+.opponent-card-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transition: transform 0.3s ease;
+}
+
+.opponent-card-display:hover .opponent-card-image {
+    transform: scale(1.05);
+}
+
+.card-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.8));
+    padding: 16px;
+    color: white;
+}
+
+.card-overlay h4 {
+    margin: 0 0 8px 0;
+    font-size: 1.25rem;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+}
+
+.card-hp {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #fbbf24;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Game Result Modal */
+.game-result-overlay {
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(2px);
+}
+
+.game-result-container {
+    position: relative;
+    width: min(680px, 92vw);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.game-result-container.victory-result {
+    background: linear-gradient(160deg, rgba(32, 32, 48, 0.96), rgba(24, 24, 32, 0.96));
+}
+
+.game-result-container.defeat-result {
+    background: linear-gradient(160deg, rgba(20, 18, 26, 0.96), rgba(16, 14, 22, 0.96));
+}
+
+.result-background-decoration {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(1200px 400px at -10% -10%, rgba(255, 215, 0, 0.12), transparent 60%),
+        radial-gradient(1000px 500px at 110% 110%, rgba(66, 153, 225, 0.12), transparent 60%);
+    pointer-events: none;
+}
+
+.result-content {
+    position: relative;
+    padding: 28px 28px 22px;
+    color: #fff;
+}
+
+.result-banner {
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+.result-title {
+    font-size: 42px;
+    letter-spacing: 2px;
+    font-weight: 800;
+}
+
+.victory-result .result-title {
+    color: #fde68a;
+    text-shadow: 0 0 18px rgba(253, 230, 138, 0.5);
+}
+
+.defeat-result .result-title {
+    color: #93c5fd;
+    text-shadow: 0 0 14px rgba(147, 197, 253, 0.35);
+}
+
+.result-subtitle {
+    font-size: 16px;
+    opacity: 0.9;
+    margin-top: 4px;
+}
+
+.result-details {
+    display: grid;
+    gap: 16px;
+    margin: 20px 0 8px;
+}
+
+.result-reason {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+
+.reason-label {
+    font-size: 12px;
+    opacity: 0.8;
+    margin-bottom: 4px;
+}
+
+.reason-text {
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.result-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.stat-item {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: center;
+}
+
+.stat-label {
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    margin-top: 2px;
+}
+
+.result-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+.result-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-weight: 700;
+    transition: transform .15s ease, filter .15s ease;
+}
+
+.result-btn.primary-btn {
+    background: #2563eb;
+    color: #fff;
+}
+
+.result-btn.primary-btn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+
+.result-btn.secondary-btn {
+    background: #374151;
+    color: #fff;
+}
+
+.result-btn.secondary-btn:hover {
+    filter: brightness(1.05);
+    transform: translateY(-1px);
+}
+
+.btn-icon {
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+}
+
+.result-particles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.victory-particle::before {
+    content: var(--particle-emoji, '✨');
+    position: absolute;
+    animation: floatUp 3s ease-in infinite;
+}
+
+.defeat-particle {
+    position: absolute;
+    top: -10px;
+    width: 8px;
+    height: 14px;
+    background: linear-gradient(#60a5fa, transparent);
+    border-radius: 4px;
+    animation: rainDown 4s linear infinite;
+}
+
+/* エラーメッセージ */
+.error-message {
+    animation: errorShake 0.5s ease-out;
+    color: var(--color-danger);
+    background-color: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+}
+
+/* 成功フィードバック */
+.success-feedback {
+    animation: successPop 0.4s var(--transition-spring);
+}
+
+/* モーダルアニメーションクラス */
+.modal-enter {
+    animation: fadeIn var(--anim-fast) cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.modal-exit {
+    animation: fadeOut 0.3s ease-out forwards;
+}
+
+.toast-enter {
+    animation: toastAlertDrop 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.toast-exit {
+    animation: toastAlertFade 0.3s ease-out forwards;
+}
+
+.hud-enter {
+    animation: hudPopIn 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.result-modal-enter .game-result-container {
+    animation: modalPopIn 220ms ease-out;
+}
+
+.result-modal-exit .game-result-container {
+    animation: modalFadeOut 180ms ease-in forwards;
+}
+
+#action-modal {
+    z-index: var(--z-modals);
+}
