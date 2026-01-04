@@ -27,9 +27,6 @@ export class ThreeViewBridge {
      * 初期化
      */
     async init(playmatSlotsData) {
-        console.log('🎮 ThreeViewBridge.init() called');
-        console.log('  - playmatSlotsData:', playmatSlotsData ? 'available' : 'null/undefined');
-
         this.container = document.getElementById('three-container');
 
         if (!this.container) {
@@ -37,23 +34,17 @@ export class ThreeViewBridge {
             return false;
         }
 
-        console.log('  - container found:', this.container);
-
         try {
             this.gameBoard3D = new GameBoard3D(this.container, {
                 playmatTexture: 'assets/playmat/playmat.jpg',
                 cardBackTexture: 'assets/ui/card_back.webp',
             });
 
-            console.log('  - GameBoard3D created, calling init...');
             await this.gameBoard3D.init(playmatSlotsData);
             this.isEnabled = true;
 
-            // DOMボードを非表示にする
-            document.body.classList.add('three-active');
+            console.log('🎮 Three.js View Bridge initialized - All animations enabled');
 
-            console.log('✅ ThreeViewBridge initialized successfully');
-            console.log('  - body.three-active:', document.body.classList.contains('three-active'));
             return true;
         } catch (error) {
             console.error('❌ ThreeViewBridge init failed:', error);
@@ -69,7 +60,6 @@ export class ThreeViewBridge {
         if (!this.gameBoard3D) return;
 
         this.gameBoard3D.setSlotClickHandler((data) => {
-            console.log('🖱️ Three.js slot click:', data);
             handler({
                 owner: data.owner,
                 zone: data.zone,
@@ -80,7 +70,6 @@ export class ThreeViewBridge {
         });
 
         this.gameBoard3D.setCardClickHandler((data) => {
-            console.log('🖱️ Three.js card click:', data);
             handler({
                 owner: data.owner,
                 zone: data.zone,
@@ -98,7 +87,6 @@ export class ThreeViewBridge {
         if (!this.gameBoard3D) return;
 
         this.gameBoard3D.setCardDropHandler((data) => {
-            console.log('🖱️ Three.js card drop:', data);
             handler({
                 dragData: {
                     cardId: data.cardId,
@@ -119,6 +107,11 @@ export class ThreeViewBridge {
      */
     async render(state) {
         if (!this.isEnabled || !this.gameBoard3D) return;
+        // interaction managerにgame stateを渡す
+        if (this.gameBoard3D.interactionManager) {
+            this.gameBoard3D.interactionManager.setGameState(state);
+        }
+
 
         // 差分検出
         if (this._stateEquals(this.lastState, state)) return;
@@ -143,9 +136,12 @@ export class ThreeViewBridge {
         await this._renderDiscard('player', state.players.player.discard);
         await this._renderDiscard('cpu', state.players.cpu.discard);
 
-        // 手札
-        await this._renderHand('player', state.players.player.hand);
-        await this._renderHand('cpu', state.players.cpu.hand);
+        // ✅ 手札は DOM/CSS版に任せる（一般的なTCG方式）
+        // Three.js版の手札カードを完全に削除
+        this._clearHand('player');
+        this._clearHand('cpu');
+        // await this._renderHand('player', state.players.player.hand);
+        // await this._renderHand('cpu', state.players.cpu.hand);
 
         this.lastState = this._cloneState(state);
     }
@@ -294,77 +290,61 @@ export class ThreeViewBridge {
     }
 
     /**
+     * 手札を完全にクリア（ハイブリッド方式用）
+     */
+    _clearHand(owner) {
+        const keysToRemove = [];
+        this.gameBoard3D.cards.forEach((card, runtimeId) => {
+            const cardOwner = card.getMesh()?.userData?.owner;
+            const cardZone = card.getMesh()?.userData?.zone;
+            // 同じownerで、zoneが'hand'のカードを削除
+            if (cardOwner === owner && cardZone === 'hand') {
+                keysToRemove.push(runtimeId);
+            }
+        });
+        keysToRemove.forEach(runtimeId => this.gameBoard3D.removeCard(runtimeId));
+    }
+
+    /**
      * 手札をレンダリング
      */
     async _renderHand(owner, hand) {
-        if (!hand || hand.length === 0) return;
-
         const isCpu = owner === 'cpu';
 
-        // 現在の手札カードのキーを収集
-        const currentHandKeys = new Set();
+        // ✅ 修正: 手札を完全にクリア（増殖バグ対策）
+        this._clearHand(owner);
 
-        for (let i = 0; i < hand.length; i++) {
-            const handCard = hand[i];
-            if (!handCard) continue;
+        // ✅ 手札を再構築
+        if (hand && hand.length > 0) {
+            for (let i = 0; i < hand.length; i++) {
+                const handCard = hand[i];
+                if (!handCard) continue;
 
-            const handCardKey = `hand-${handCard.runtimeId}`;
-            currentHandKeys.add(handCardKey);
+                // ✅ runtimeIdをそのままキーとして使用（addCard/removeCardと一致）
+                const imagePath = isCpu ? null : getCardImagePath(handCard.name_en, handCard);
+                const card = await this.gameBoard3D.addCard(handCard.runtimeId, {
+                    cardId: handCard.id,
+                    runtimeId: handCard.runtimeId,
+                    frontTexture: imagePath,
+                    backTexture: 'assets/ui/card_back.webp',
+                    zone: 'hand',
+                    owner,
+                    index: i,
+                    cardType: handCard.cardType || handCard.type,
+                });
 
-            // 既にレンダリング済みなら位置更新のみ
-            const existingCard = this.gameBoard3D.cards.get(handCardKey);
-            if (existingCard) {
-                // 位置を更新（カード枚数変更時のため）
-                const pos = this.gameBoard3D.getHandCardPosition(owner, i, hand.length);
-                existingCard.setPosition(pos.x, pos.y, pos.z);
-                // 手札カードの回転設定
-                const rotationX = pos.rotationX || 0;
-                const rotationY = isCpu ? 180 : 0;
-                const rotationZ = pos.rotationZ || 0;
-                existingCard.setRotation(rotationX, rotationY, rotationZ);
-                existingCard.saveBasePosition();
-                continue;
-            }
-
-            // 新規カード追加
-            const imagePath = isCpu ? null : getCardImagePath(handCard.name_en, handCard);
-            const card = await this.gameBoard3D.addCard(handCardKey, {
-                cardId: handCard.id,
-                runtimeId: handCard.runtimeId,
-                frontTexture: imagePath,
-                backTexture: 'assets/ui/card_back.webp',
-                zone: 'hand',
-                owner,
-                index: i,
-                cardType: handCard.cardType || handCard.type,
-            });
-
-            if (card) {
-                const pos = this.gameBoard3D.getHandCardPosition(owner, i, hand.length);
-                card.setPosition(pos.x, pos.y, pos.z);
-                // 手札カードの回転設定
-                // rotationX: 前後の傾き（プレイヤーに向ける）
-                // rotationY: CPU手札は裏向き
-                // rotationZ: ファンの傾き角度
-                const rotationX = pos.rotationX || 0;
-                const rotationY = isCpu ? 180 : 0;
-                const rotationZ = pos.rotationZ || 0;
-                card.setRotation(rotationX, rotationY, rotationZ);
-
-                card.saveBasePosition();
+                if (card) {
+                    const pos = this.gameBoard3D.getHandCardPosition(owner, i, hand.length);
+                    card.setPosition(pos.x, pos.y, pos.z);
+                    // 手札カードの回転設定
+                    const rotationX = pos.rotationX || 0;
+                    const rotationY = isCpu ? 180 : 0;
+                    const rotationZ = pos.rotationZ || 0;
+                    card.setRotation(rotationX, rotationY, rotationZ);
+                    card.saveBasePosition();
+                }
             }
         }
-
-        // 手札から消えたカードを削除
-        const keysToRemove = [];
-        this.gameBoard3D.cards.forEach((card, key) => {
-            // Card3DのuserDataはmesh.userDataに格納されている
-            const cardOwner = card.getMesh()?.userData?.owner;
-            if (key.startsWith(`hand-`) && cardOwner === owner && !currentHandKeys.has(key)) {
-                keysToRemove.push(key);
-            }
-        });
-        keysToRemove.forEach(key => this.gameBoard3D.removeCard(key));
     }
 
     /**
@@ -686,11 +666,27 @@ export class ThreeViewBridge {
     }
 
     /**
+     * ベンチ→アクティブ昇格アニメーション
+     */
+    async animateBenchToActive(pokemonId, benchIndex, duration = 500) {
+        if (!this.gameBoard3D) return;
+        await this.gameBoard3D.animateBenchToActive(pokemonId, benchIndex, duration);
+    }
+
+    /**
      * 進化アニメーション
      */
     async animateEvolution(runtimeId, duration = 800) {
         if (!this.gameBoard3D) return;
         await this.gameBoard3D.animateCardEvolution(runtimeId, duration);
+    }
+
+    /**
+     * カードフリップアニメーション
+     */
+    async flipCard(runtimeId, duration = 600) {
+        if (!this.gameBoard3D) return;
+        await this.gameBoard3D.flipCard(runtimeId, duration);
     }
 
     /**

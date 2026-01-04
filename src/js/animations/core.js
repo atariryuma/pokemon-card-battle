@@ -29,28 +29,50 @@ export class AnimationCore {
     }
 
     /**
-     * 基本アニメーション実行
+     * ✅ 基本アニメーション実行（安定性改善版）
      * @param {Element} element - 対象要素
      * @param {string} className - CSSクラス名
      * @param {number} duration - 継続時間
      * @returns {Promise} 完了Promise
      */
     async animate(element, className, duration = ANIMATION_TIMING.normal) {
-        if (!element) return;
-        
-        return new Promise(resolve => {
+        if (!element) {
+            return Promise.resolve();
+        }
+
+        return new Promise((resolve) => {
+            // ✅ 既に同じアニメーションが実行中の場合はスキップ
+            if (element.classList.contains(className)) {
+                console.warn(`[AnimationCore] Animation already active: ${className}`);
+                return resolve();
+            }
+
             // アニメーション開始
             element.classList.add(className);
-            
-            // 完了後クリーンアップ
+
+            let timeoutId = null;
+            let animationEndHandled = false;
+
+            // ✅ 完了後クリーンアップ（確実に1回のみ実行）
             const cleanup = () => {
+                if (animationEndHandled) return;
+                animationEndHandled = true;
+
+                if (timeoutId) {
+                    clearTimeout(timeoutId);
+                    timeoutId = null;
+                }
+
                 element.classList.remove(className);
                 this.activeAnimations.delete(cleanup);
                 resolve();
             };
-            
+
+            // ✅ animationendイベントとタイムアウトの両方でクリーンアップ
+            element.addEventListener('animationend', cleanup, { once: true });
+
             this.activeAnimations.add(cleanup);
-            setTimeout(cleanup, duration);
+            timeoutId = setTimeout(cleanup, duration + 100); // 100ms余裕を持たせる
         });
     }
 

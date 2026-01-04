@@ -6,6 +6,7 @@
 
 import { GAME_PHASES } from './phase-manager.js';
 import { noop } from './utils.js';
+import { gameContext } from './core/game-context.js';
 
 /**
  * エラータイプの定義
@@ -247,9 +248,10 @@ export class ErrorHandler {
         const userMessage = this.getUserFriendlyMessage(errorInfo);
         const suggestions = this.getErrorSuggestions(errorInfo);
         
-        if (window.gameInstance?.view) {
+        const view = gameContext.hasGameInstance() ? gameContext.getView() : null;
+        if (view) {
             // 致命的エラーは中央モーダルで表示（新システム）
-            window.gameInstance.view.displayModal({
+            view.displayModal({
                 title: '⚠️ エラーが発生しました',
                 message: `
                     <div class="error-display">
@@ -272,7 +274,7 @@ export class ErrorHandler {
                     },
                     {
                         text: '🎮 新しいゲーム',
-                        callback: () => window.gameInstance?.init(),
+                        callback: () => gameContext.getGameInstance()?.init(),
                         className: 'px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg'
                     },
                     {
@@ -335,14 +337,16 @@ export class ErrorHandler {
     async retryLastAction() {
         // 実装は具体的なアクション履歴システムに依存
         noop('🔄 Retrying last action...');
-        
-        if (window.gameInstance?.view) {
-            window.gameInstance.view.hideModal();
+
+        const view = gameContext.hasGameInstance() ? gameContext.getView() : null;
+        if (view) {
+            view.hideModal();
         }
-        
+
         // 基本的なリトライとして、現在のフェーズを再実行
-        if (window.gameInstance?.state) {
-            await window.gameInstance._updateUI();
+        if (gameContext.hasGameInstance()) {
+            const gameInstance = gameContext.getGameInstance();
+            await gameInstance._updateUI();
         }
     }
 
@@ -350,9 +354,10 @@ export class ErrorHandler {
      * エラー詳細表示
      */
     showErrorDetails(errorInfo) {
-        if (window.gameInstance?.view) {
+        const view = gameContext.hasGameInstance() ? gameContext.getView() : null;
+        if (view) {
             // エラー詳細も中央モーダルで表示（新システム）
-            window.gameInstance.view.displayModal({
+            view.displayModal({
                 title: '🔍 エラー詳細情報',
                 message: `
                     <div class="error-details">
@@ -366,7 +371,7 @@ export class ErrorHandler {
                 actions: [
                     {
                         text: '戻る',
-                        callback: () => window.gameInstance.view.hideModal(),
+                        callback: () => view.hideModal(),
                         className: 'px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg'
                     }
                 ]

@@ -1,20 +1,27 @@
 import { createInitialState } from './state.js';
 import { View } from './view.js';
 import * as Logic from './logic.js';
-import { animate, animationManager } from './animation-manager.js';
-import { CardOrientationManager } from './card-orientation.js';
+import { animate } from './animation-manager.js';
 import { phaseManager, GAME_PHASES } from './phase-manager.js';
 import { BUTTON_IDS, ACTION_BUTTON_GROUPS } from './ui-constants.js';
 import { errorHandler, ERROR_TYPES } from './error-handler.js';
 import { setupManager } from './setup-manager.js';
 import { turnManager } from './turn-manager.js';
-import { getCardImagePath, loadCardsFromJSON, getCardMasterList } from './data-manager.js';
+import { loadCardsFromJSON } from './data-manager.js';
 import { addLogEntry } from './state.js';
 import { modalManager } from './modal-manager.js';
 import { ZIndexManager } from './z-index-constants.js';
 import { memoryManager } from './memory-manager.js';
 import { actionHUDManager } from './action-hud-manager.js';
 import { noop } from './utils.js';
+import { soundManager } from './sound-manager.js';
+import { inputManager } from './input-manager.js';
+import { stateQueue } from './state-queue.js';
+
+// 新しいアーキテクチャのインポート
+import { gameContext } from './core/game-context.js';
+import { eventBus, GameEventTypes } from './core/event-bus.js';
+import { GAME_CONFIG } from './constants/game-config.js';
 
 export class Game {
     constructor(rootEl, playmatSlotsData) {
@@ -35,16 +42,12 @@ export class Game {
         // Selected card for setup
         this.selectedCardForSetup = null;
 
-        // Animation control flags
-        this.setupAnimationsExecuted = false;
-        this.prizeCardAnimationExecuted = false;
-        this.prizeAnimationCompleted = false; // サイドアニメーション完了フラグ
-        this.cardRevealAnimationExecuted = false;
-
-        // Prize animation status tracking (separated for player and CPU)
-        this.prizeAnimationStatus = {
-            player: false,  // プレイヤー側サイド配布完了
-            cpu: false      // CPU側サイド配布完了
+        // ✅ Animation control flags（統一管理）
+        this.animationStatus = {
+            setupExecuted: false,           // セットアップアニメーション完了
+            prizePlayerDealt: false,        // プレイヤーサイド配布完了
+            prizeCpuDealt: false,           // CPUサイド配布完了
+            cardRevealExecuted: false       // カード公開アニメーション完了
         };
 
         // レンダリング最適化用
@@ -56,7 +59,6 @@ export class Game {
         this.animationQueue = [];
         this.isAnimating = false;
         this.animationPromises = new Set();
-        this.animationCompletionCallbacks = new Map();
     } // End of constructor
 
     _delay(ms) {
@@ -112,17 +114,12 @@ export class Game {
     }
 
     resetAnimationFlags() {
-        this.setupAnimationsExecuted = false;
-        this.prizeCardAnimationExecuted = false;
-        this.prizeAnimationCompleted = false;
-        this.cardRevealAnimationExecuted = false;
-
-        // Reset prize animation status
-        this.prizeAnimationStatus = {
-            player: false,
-            cpu: false
+        this.animationStatus = {
+            setupExecuted: false,
+            prizePlayerDealt: false,
+            prizeCpuDealt: false,
+            cardRevealExecuted: false
         };
-
         noop('🔄 Animation flags reset');
     }
 
@@ -352,37 +349,58 @@ export class Game {
             this.view = new View(this.rootEl);
             this.view.bindCardClick(this._handleCardClick.bind(this));
             this.view.bindDragAndDrop(this._handleDragDrop.bind(this));
-            this.view.setConfirmSetupButtonHandler(this._handleConfirmSetup.bind(this)); // Bind confirm button
+            this.view.setConfirmSetupButtonHandler(this._handleConfirmSetup.bind(this));
 
-            // Initialize Three.js 3D View (非同期、失敗してもDOMビューで継続)
-            this.view.initThreeJS(this.playmatSlotsData).then((success) => {
-                if (success) {
-                    noop('🎮 Three.js 3D View ready');
-                    // Three.js用のドラッグ&ドロップをバインド
-                    this.view.bindThreeJSDragDrop(this._handleDragDrop.bind(this));
-                } else {
-                    noop('ℹ️ Using DOM view (Three.js not available)');
-                }
-            });
+            // ✅ Three.js初期化を完了まで待機（最重要修正）
+            console.log('⏳ Waiting for Three.js initialization...');
+            const threeJSReady = await this.view.initThreeJS(this.playmatSlotsData);
+            if (threeJSReady) {
+                console.log('✅ Three.js 3D View ready - Animation system active');
+                this.view.bindThreeJSDragDrop(this._handleDragDrop.bind(this));
+            } else {
+                throw new Error('Three.js initialization failed');
+            }
 
             // Initialize ActionHUDManager and setup initial buttons
             this.actionHUDManager.init();
 
-            // Setup action button event handlers (统合処理)
+            // Setup action button event handlers
             this._setupActionButtonHandlers();
 
-            // Render the initial board state immediately after state creation
-            noop('🎨 Rendering initial game state with deck...');
+            // ✅ Three.js初期化後にレンダリング（順序保証）
+            console.log('🎨 Rendering initial game state with deck...');
             this.view.render(this.state);
+            console.log('✅ Initial render complete');
 
             // Show game start message and enable action HUD button
             this.view.showGameMessage('手札を7枚引くボタンを押してゲームを開始してください。');
 
-            // Make game instance globally accessible for modal callbacks
-            window.gameInstance = this;
+            // ✅ リファクタリング: GameContextにすべての依存を登録
+            gameContext.registerGameInstance(this);
+            gameContext.registerStateQueue(stateQueue);
+            gameContext.registerAnimationManager(animate);
+            gameContext.registerSetupManager(setupManager);
+
+            console.log('✅ GameContext initialized with all dependencies');
+
+            // ✅ イベント駆動アーキテクチャ: ゲーム初期化完了を通知
+            eventBus.emit(GameEventTypes.GAME_INITIALIZED, {
+                state: this.state,
+                timestamp: Date.now()
+            });
+            console.log('📡 EventBus: GAME_INITIALIZED event emitted');
+
+            // ✅ Critical #5: 状態キューシステムの初期化
+            stateQueue.setCurrentState(this.state);
+            stateQueue.setStateUpdateCallback((newState) => {
+                this._updateState(newState, 'stateQueue');
+            });
 
             // カードエディタからの更新を監視
             this._setupCardDataListener();
+
+            // Initialize sound and input managers
+            this._setupSoundAndInputManagers();
 
             // システムメンテナンス開始
             this._scheduleSystemMaintenance();
@@ -454,14 +472,8 @@ export class Game {
      * モーダルからトリガーされるセットアップ開始
      */
     async triggerInitialSetup() {
-        // No longer hiding a modal, as messages are now in game-message-display
-        // setTimeout(async () => {
-        //     const modal = document.getElementById('action-modal');
-        //     modal?.classList.add('hidden');
-
         // 実際のセットアップ開始
         await this._startGameSetup();
-        // }, 500);
     }
 
 
@@ -537,32 +549,45 @@ export class Game {
         };
     }
 
-    async _updateState(newState, context = 'updateState') {
-        const previousPhase = this.state?.phase;
-
-        // 状態検証と修復
+    /**
+     * 状態検証と修復を実行
+     * @private
+     */
+    _validateAndFixState(newState, context) {
         const validation = this._validateGameState(newState, context);
         if (!validation.isValid) {
             console.error(`❌ Critical state validation error in ${context}, attempting recovery`);
             // 重大なエラーの場合、前の状態を保持
             if (this.state) {
                 console.warn('⚠️ Keeping previous state due to validation failure');
-                return;
+                return null;
             }
         }
+        return validation.fixedState;
+    }
 
+    /**
+     * 状態適用とフェーズ遷移処理
+     * @private
+     */
+    async _applyStateUpdate(validatedState, previousPhase) {
         // 修復された状態を使用
-        this.state = validation.fixedState;
+        this.state = validatedState;
+
+        // ✅ Critical #5: 状態キューにも最新状態を反映
+        if (stateQueue) {
+            stateQueue.setCurrentState(validatedState);
+        }
 
         // Update phase manager
         const oldPhase = this.phaseManager.currentPhase;
-        this.phaseManager.currentPhase = validation.fixedState.phase;
+        this.phaseManager.currentPhase = validatedState.phase;
 
         // フェーズ遷移アニメーション（必要な場合のみ）
-        if (oldPhase !== validation.fixedState.phase) {
-            await this.animate.changePhase(oldPhase, validation.fixedState.phase);
+        if (oldPhase !== validatedState.phase) {
+            await this.animate.changePhase(oldPhase, validatedState.phase);
             // フェーズ変更時のActionHUD制御
-            this._handlePhaseTransition(oldPhase, validation.fixedState.phase);
+            this._handlePhaseTransition(oldPhase, validatedState.phase);
         }
 
         // Handle CPU prize selection
@@ -574,13 +599,19 @@ export class Game {
         if (this.state.needsCpuAutoSelect) {
             this.state = await this.turnManager.handleCpuAutoNewActive(this.state);
         }
+    }
 
+    /**
+     * 状態変更後の処理（レンダリング、イベント発行）
+     * @private
+     */
+    _finalizeStateUpdate(validatedState, previousPhase, context) {
         // バッチレンダリングをスケジュール（即座に実行せず、まとめて処理）
         this._scheduleRender();
 
         // スマートActionHUDシステム: プレイヤーのターンでボタンを更新
-        if (validation.fixedState.phase === GAME_PHASES.PLAYER_MAIN &&
-            validation.fixedState.turnPlayer === 'player') {
+        if (validatedState.phase === GAME_PHASES.PLAYER_MAIN &&
+            validatedState.turnPlayer === 'player') {
             // レンダリング後に非同期でボタンを更新
             requestAnimationFrame(() => {
                 this._updateSmartActionButtons();
@@ -588,9 +619,45 @@ export class Game {
         }
 
         // デバッグログ（重要な状態変更のみ）
-        if (validation.warnings.length > 0 || previousPhase !== validation.fixedState.phase) {
-            noop(`🔄 State updated in ${context}: ${previousPhase} → ${validation.fixedState.phase}`);
+        if (previousPhase !== validatedState.phase) {
+            noop(`🔄 State updated in ${context}: ${previousPhase} → ${validatedState.phase}`);
         }
+
+        // ✅ イベント駆動アーキテクチャ: 状態更新を通知
+        eventBus.emit(GameEventTypes.STATE_UPDATED, {
+            state: validatedState,
+            previousPhase,
+            context,
+            timestamp: Date.now()
+        });
+
+        // ✅ フェーズ変更イベントを発行
+        if (previousPhase !== validatedState.phase) {
+            eventBus.emit(GameEventTypes.PHASE_CHANGED, {
+                oldPhase: previousPhase,
+                newPhase: validatedState.phase,
+                turnPlayer: validatedState.turnPlayer,
+                timestamp: Date.now()
+            });
+        }
+    }
+
+    /**
+     * メイン状態更新メソッド（リファクタリング済み）
+     * 単一責任原則に従い、3つの小関数に処理を委譲
+     */
+    async _updateState(newState, context = 'updateState') {
+        const previousPhase = this.state?.phase;
+
+        // 1. 状態検証と修復
+        const validatedState = this._validateAndFixState(newState, context);
+        if (!validatedState) return;
+
+        // 2. 状態適用とフェーズ遷移処理
+        await this._applyStateUpdate(validatedState, previousPhase);
+
+        // 3. 状態変更後の処理（レンダリング、イベント発行）
+        this._finalizeStateUpdate(validatedState, previousPhase, context);
     } // End of _updateState
 
     /**
@@ -838,16 +905,16 @@ export class Game {
         // DOM キャッシュのクリーンアップ
         if (this.view?.domCache) {
             const cacheSize = this.view.domCache.size;
-            if (cacheSize > 100) { // 上限を設定
+            if (cacheSize > GAME_CONFIG.MEMORY.CACHE_MAX_SIZE) {
                 const entries = Array.from(this.view.domCache.entries());
                 // 古いエントリーを削除（LRU方式）
-                const toDelete = entries.slice(0, cacheSize - 50);
+                const toDelete = entries.slice(0, cacheSize - GAME_CONFIG.MEMORY.CACHE_RETAIN_SIZE);
                 toDelete.forEach(([key]) => this.view.domCache.delete(key));
             }
         }
 
         // レンダリングキューのクリーンアップ
-        if (this.renderQueue.length > 20) {
+        if (this.renderQueue.length > GAME_CONFIG.MEMORY.RENDER_QUEUE_MAX) {
             this.renderQueue = this.renderQueue.slice(-10); // 最新10件のみ保持
         }
 
@@ -996,13 +1063,26 @@ export class Game {
 
     async _handleCardClick(dataset) {
         const { owner, zone, cardId, index } = dataset;
-        // CPU側のプレースホルダーも反応させるため、所有者チェックを撤廃
 
         // 処理中の場合はクリックを無視
         if (this.state.isProcessing) {
             return;
         }
 
+        // ターンプレイヤーと所有者のチェック（情報表示を除く）
+        if (this.state.turnPlayer === 'player' && owner === 'cpu') {
+            // CPUのカードは情報表示のみ許可（アクティブ・ベンチのみ）
+            if (zone === 'active' || zone === 'bench') {
+                // 情報表示は将来的に実装（現在は無視）
+                return;
+            }
+            return;
+        }
+
+        if (this.state.turnPlayer === 'cpu' && owner === 'player') {
+            // CPUターン中はプレイヤーカードをクリック不可
+            return;
+        }
         // Handle different phases
         switch (this.state.phase) {
             case GAME_PHASES.SETUP:
@@ -1044,7 +1124,17 @@ export class Game {
         if (this.state.phase !== GAME_PHASES.PLAYER_MAIN) return;
         if (this.state.isProcessing) return;
 
-        const { cardId, cardType } = dragData;
+        // ターンプレイヤーチェック
+        if (this.state.turnPlayer !== 'player') {
+            return;
+        }
+
+        const { cardId, cardType, owner } = dragData;
+
+        // CPUのカードはドラッグ不可
+        if (owner === 'cpu') {
+            return;
+        }
         const { zone: targetZone, index: targetIndex } = dropTarget;
 
         try {
@@ -1102,7 +1192,7 @@ export class Game {
      * エネルギーカードのドロップ処理
      */
     async _handleEnergyDrop(cardId, targetZone, targetIndex) {
-        if (this.state.hasAttachedEnergyThisTurn) {
+        if (this.state.turnState?.energyAttached > 0) {
             this.view.showErrorMessage('このターンはすでにエネルギーを付けています', 'warning');
             return;
         }
@@ -1185,7 +1275,8 @@ export class Game {
                 const card = this.state.players.player.hand.find(c => (c.runtimeId === cardId) || (c.id === cardId));
                 if (card && card.card_type === 'Pokémon' && card.stage === 'BASIC') {
                     this.selectedCardForSetup = card;
-                    this._highlightCard(card.runtimeId || card.id, true);
+                    // ✅ 選択時は'select'タイプでハイライト
+                    this._highlightCard(card.runtimeId || card.id, true, { type: 'select' });
                     // Three.js版: 配置可能スロットをハイライト
                     if (this.view.threeViewBridge?.isActive()) {
                         this.view.threeViewBridge.highlightSlots('active', 'player');
@@ -1203,17 +1294,15 @@ export class Game {
                 // 配置先を選択
                 const targetIndex = zone === 'bench' ? parseInt(index, 10) : 0;
 
-                // DOM上のカード要素を取得（手札のカード）
-                const cardElement = document.querySelector(`[data-runtime-id="${this.selectedCardForSetup.runtimeId || this.selectedCardForSetup.id}"]`) ||
-                    document.querySelector(`[data-card-id=\"${this.selectedCardForSetup.id}\"]`);
-                if (!cardElement) {
-                    console.warn(`⚠️ Card element not found for ${this.selectedCardForSetup.id}`);
-                }
+                // ✅ Three.js専用モード: DOM版は完全削除
+                const cardToAnimate = this.selectedCardForSetup;
 
-                // アニメーションに必要な情報を事前に取得
-                const cardToAnimate = this.selectedCardForSetup; // アニメーション用にカード情報を保持
-                // ★ 追加: アニメーション開始時のカードの正確な位置を取得
-                const initialCardRect = cardElement ? cardElement.getBoundingClientRect() : null;
+                // ✅ アニメーション実行（状態更新の前）
+                await this._animateBattlePokemonPlacement(
+                    cardToAnimate.runtimeId || cardToAnimate.id,
+                    zone,
+                    targetIndex
+                );
 
                 // 状態更新実行（手札から除外し、配置）
                 const previousState = this.state;
@@ -1240,39 +1329,17 @@ export class Game {
                 // selectedCardForSetup のリセットとハイライト解除を、
                 // State更新直後、Viewレンダリングの前に移動
                 this.selectedCardForSetup = null;
-                this._clearCardHighlights();
+                this._clearAllHighlights();
                 // Three.js版: スロットハイライト解除
                 if (this.view.threeViewBridge?.isActive()) {
                     this.view.threeViewBridge.clearHighlights();
                 }
                 this.state.prompt.message = '次のたねポケモンを選択するか、確定してください。';
 
-                // 一度だけレンダリングし、重複を防止
-                this._updateState(this.state); // まずViewを更新
+                // ✅ Three.js専用: Viewを更新（Three.jsが自動でアニメーション）
+                await this._updateState(this.state);
 
                 // バトルポケモンが配置されている場合は確定HUDを表示
-                this._showConfirmHUDIfReady();
-
-                // DOM更新を待つ
-                await new Promise(resolve => requestAnimationFrame(resolve));
-
-                // カード移動アニメーションを実行（シンプルAPI）
-                noop('[Setup] Starting setup animation');
-                try {
-                    const runtimeOrMasterId = cardToAnimate.runtimeId || cardToAnimate.id;
-                    const { animateFlow } = await import('./animations/flow.js');
-                    if (zone === 'active') {
-                        await animateFlow.handToActive('player', runtimeOrMasterId, { isSetupPhase: true, initialSourceRect: initialCardRect });
-                    } else if (zone === 'bench') {
-                        await animateFlow.handToBench('player', runtimeOrMasterId, targetIndex, { isSetupPhase: true, initialSourceRect: initialCardRect });
-                    }
-                    noop('[Setup] Animation completed');
-                } catch (error) {
-                    console.error('❌ Setup animation failed:', error);
-                }
-
-                // アニメーション完了後に確定HUDを再表示（確実に表示されるように）
-                noop('🔍 Animation completed, showing confirm HUD again');
                 this._showConfirmHUDIfReady();
 
             } else if ((zone === 'active' || zone === 'bench') && !this.selectedCardForSetup) {
@@ -1290,7 +1357,7 @@ export class Game {
      */
     async _handlePlayerDraw() {
         // 既存のドロー制限チェック
-        if (this.state.hasDrawnThisTurn || this.state.turnState?.hasDrawn) {
+        if (this.state.turnState?.hasDrawn || this.state.turnState?.hasDrawn) {
             this.state = addLogEntry(this.state, { message: 'このターンはすでにカードを引いています。' });
             this.view.showError('ALREADY_DRAWN_CARD');
             return;
@@ -1321,6 +1388,15 @@ export class Game {
 
 
         this.state = await this.turnManager.handlePlayerDraw(this.state);
+
+        // ✅ イベント駆動: カードドローイベント
+        const drawnCard = this.state.players.player.hand[this.state.players.player.hand.length - 1];
+        eventBus.emit(GameEventTypes.CARD_DRAWN, {
+            playerId: 'player',
+            cardId: drawnCard?.id || 'unknown',
+            zone: 'hand',
+            timestamp: Date.now()
+        });
 
         // ドロー後にメインフェーズに移行
         this.state.phase = GAME_PHASES.PLAYER_MAIN;
@@ -1368,6 +1444,15 @@ export class Game {
      * 新しいアクティブポケモン選択
      */
     async _handleNewActiveSelection(benchIndex) {
+        // ベンチのポケモンを取得（アニメーション用）
+        const benchPokemon = this.state.players[this.state.playerToAct]?.bench[benchIndex];
+        const pokemonId = benchPokemon?.runtimeId || benchPokemon?.id;
+
+        // ✅ アニメーション実行（状態更新の前）
+        if (pokemonId) {
+            await this._animateBenchToActive(pokemonId, benchIndex);
+        }
+
         // Use the new unified turnManager method
         let newState = await this.turnManager.handleNewActiveSelection(this.state, benchIndex);
 
@@ -1442,18 +1527,14 @@ export class Game {
      * サイドカード選択処理
      */
     async _handlePrizeSelection(prizeIndex) {
-        console.log(`🎯 Prize selection attempt: index ${prizeIndex}, prizesToTake: ${this.state.players[this.state.playerToAct].prizesToTake}`);
-
         const playerId = this.state.playerToAct;
 
         // Validate the selection
         if (this.state.players[playerId].prizesToTake === 0) {
-            console.warn('⚠️ No prizes available to take');
             return;
         }
 
         if (!this.state.players[playerId].prize[prizeIndex]) {
-            console.warn('⚠️ No prize card at index:', prizeIndex);
             return;
         }
 
@@ -1461,7 +1542,6 @@ export class Game {
 
         // Check if state actually changed
         if (newState === this.state) {
-            console.warn('⚠️ Prize card selection failed - state unchanged');
             return;
         }
 
@@ -1497,7 +1577,6 @@ export class Game {
             }
         }
 
-        console.log('✅ Prize card taken successfully, remaining:', newState.players[playerId].prizesToTake);
         this._updateState(newState);
     }
 
@@ -1562,13 +1641,29 @@ export class Game {
         }, 100);
     }
 
-    _placeOnBench(cardId) {
+    async _placeOnBench(cardId) {
         const emptyIndex = this.state.players.player.bench.findIndex(slot => slot === null);
         if (emptyIndex !== -1) {
             // cardId は runtimeId の可能性があるため、master id に正規化
             const handCard = this.state.players.player.hand.find(c => (c.runtimeId === cardId) || (c.id === cardId));
             const masterId = handCard?.id || cardId;
+
+            // ✅ アニメーション実行（状態更新の前）
+            await this._animateBattlePokemonPlacement(cardId, 'bench', emptyIndex);
+
             const newState = Logic.placeCardOnBench(this.state, 'player', masterId, emptyIndex);
+
+            // ✅ イベント駆動: カードプレイイベント
+            eventBus.emit(GameEventTypes.CARD_PLAYED, {
+                cardId: masterId,
+                cardType: handCard?.card_type,
+                playerId: 'player',
+                fromZone: 'hand',
+                toZone: 'bench',
+                benchIndex: emptyIndex,
+                timestamp: Date.now()
+            });
+
             this._updateState(newState);
         } else {
             // ベンチが埋まっている場合は警告トーストを表示
@@ -1698,7 +1793,7 @@ export class Game {
             }, 0);
         } else if (card.card_type === 'Basic Energy' || card.card_type === 'Energy') {
             // エネルギーを付ける
-            if (this.state.hasAttachedEnergyThisTurn) {
+            if (this.state.turnState?.energyAttached > 0) {
                 this.state = addLogEntry(this.state, { message: 'このターンはすでにエネルギーをつけました。' });
                 this.view.showErrorMessage('このターンはすでにエネルギーをつけました。', 'warning');
                 return;
@@ -1841,20 +1936,15 @@ export class Game {
         const active = this.state.players.player.active;
         if (!active) return;
 
-        // Get the active Pokémon's DOM element before the state update
-        const activePokemonElement = document.querySelector(`.player-self .active-bottom .relative[data-card-id="${active.id}"]`);
-        // Get the discard pile's DOM element
-        const discardPileElement = document.querySelector(`.player-self .discard-container`);
-
         const { newState, discardedEnergy } = this.turnManager.handlePlayerMainPhase(this.state, 'retreat_pokemon', {
             fromActiveId: active.id,
             toBenchIndex: benchIndex
         });
 
         if (newState !== this.state) {
-            // Animate discarded energy cards
-            if (discardedEnergy && discardedEnergy.length > 0 && activePokemonElement && discardPileElement) {
-                await animate.energyDiscard(discardedEnergy, activePokemonElement, discardPileElement);
+            // ✅ Three.js専用: エネルギー廃棄アニメーション
+            if (discardedEnergy && discardedEnergy.length > 0) {
+                await animate.energyDiscard(discardedEnergy, null, null);
             }
 
             newState.pendingAction = null;
@@ -3148,7 +3238,7 @@ export class Game {
         noop('✅ Player prize card animation completed');
 
         // プレイヤー側アニメーション完了をマーク
-        this.prizeAnimationStatus.player = true;
+        this.animationStatus.prizePlayerDealt = true;
 
         // 両者準備完了チェック（setup-manager経由）
         this.setupManager._checkBothPlayersReady();
@@ -3191,9 +3281,6 @@ export class Game {
         }
 
         // 3. ターン制約をリセット (ドロー以外のもの)
-        newState.hasAttachedEnergyThisTurn = false;
-        newState.canRetreat = true;
-        newState.canPlaySupporter = true;
 
         // 4. プレイヤーのドローフェーズに移行（手動ドロー）
         newState.phase = GAME_PHASES.PLAYER_DRAW;
@@ -3204,6 +3291,19 @@ export class Game {
         noop('🃏 Hand after _updateState:', this.state.players.player.hand?.length || 0, 'cards');
 
         this.state = addLogEntry(this.state, { message: 'バトル開始！' });
+
+        // ✅ イベント駆動: ゲーム開始イベント
+        eventBus.emit(GameEventTypes.GAME_STARTED, {
+            firstPlayer: 'player',
+            timestamp: Date.now()
+        });
+
+        // ✅ イベント駆動: プレイヤーターン開始イベント
+        eventBus.emit(GameEventTypes.TURN_STARTED, {
+            turnPlayer: 'player',
+            turnNumber: this.state.turn || 1,
+            timestamp: Date.now()
+        });
     }
 
     /**
@@ -3217,39 +3317,10 @@ export class Game {
         }
 
         this.cardRevealAnimationExecuted = true;
-        noop('🃏 Starting card reveal animation');
+        noop('✅ Three.js専用: カードフリップはThree.jsが自動処理（表示は常に正しい面）');
 
-        const allPokemonElements = [];
-
-        // プレイヤーのバトル場とベンチ
-        if (this.state.players.player.active) {
-            const activeEl = document.querySelector('.player-self .active-bottom .relative');
-            if (activeEl) allPokemonElements.push({ element: activeEl, card: this.state.players.player.active });
-        }
-        this.state.players.player.bench.forEach((pokemon, index) => {
-            if (pokemon) {
-                const benchEl = document.querySelector(`.player-self .bottom-bench-${index + 1} .relative`);
-                if (benchEl) allPokemonElements.push({ element: benchEl, card: pokemon });
-            }
-        });
-
-        // CPUのバトル場とベンチ
-        if (this.state.players.cpu.active) {
-            const activeEl = document.querySelector('.opponent-board .active-top .relative');
-            if (activeEl) allPokemonElements.push({ element: activeEl, card: this.state.players.cpu.active });
-        }
-        this.state.players.cpu.bench.forEach((pokemon, index) => {
-            if (pokemon) {
-                const benchEl = document.querySelector(`.opponent-board .top-bench-${index + 1} .relative`);
-                if (benchEl) allPokemonElements.push({ element: benchEl, card: pokemon });
-            }
-        });
-
-        // 各ポケモンをフリップ
-        noop(`🔥 About to flip ${allPokemonElements.length} pokemon cards`);
-        for (const { element, card } of allPokemonElements) {
-            await animationManager.flipCardFaceUp(element, getCardImagePath(card.name_en, card));
-        }
+        // ✅ Three.js専用モード: カードは常に正しい面で表示される
+        // フリップアニメーションは不要（Three.jsがrotationYで管理）
     }
 
     /**
@@ -3257,11 +3328,11 @@ export class Game {
      */
     _scheduleSetupAnimations() {
         // 重複実行防止
-        if (this.setupAnimationsExecuted) {
+        if (this.animationStatus.setupExecuted) {
             return;
         }
 
-        this.setupAnimationsExecuted = true;
+        this.animationStatus.setupExecuted = true;
 
         // requestAnimationFrame を使って確実にDOM準備完了を待つ
         requestAnimationFrame(() => {
@@ -3295,130 +3366,64 @@ export class Game {
     }
 
     /**
-     * DOM要素存在確認
+     * DOM要素存在確認（ハイブリッドモード対応）
+     * ✅ 手札はDOMで管理されるため要素の存在確認が必要
      */
     async _verifyDOMElements() {
-        const playerHand = document.getElementById('player-hand');
-        const cpuHand = document.getElementById('cpu-hand');
+        const maxAttempts = 20;
+        let attempts = 0;
 
-        if (!playerHand || !cpuHand) {
-            throw new Error('Hand elements not found');
+        while (attempts < maxAttempts) {
+            const playerHand = document.getElementById('player-hand');
+            const cpuHand = document.getElementById('cpu-hand');
+
+            if (playerHand && cpuHand) {
+                console.log('✅ DOM elements verified: #player-hand and #cpu-hand exist');
+                return;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 50));
+            attempts++;
         }
 
-        // 要素が空の場合は少し待ってから再確認
-        if (playerHand.children.length === 0 || cpuHand.children.length === 0) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-        }
+        console.warn('⚠️ _verifyDOMElements: Timeout waiting for hand elements');
     }
 
     /**
-     * 初期手札ドローアニメーション
+     * 初期手札ドローアニメーション（ハイブリッド方式：DOM版）
      */
     async _animateInitialHandDraw() {
-        const playerHand = document.getElementById('player-hand');
-        const cpuHand = document.getElementById('cpu-hand');
-
-        // アニメーション開始直前に準備クラスを削除
-        playerHand?.classList.remove('is-preparing-animation');
-        cpuHand?.classList.remove('is-preparing-animation');
-
-        // 準備クラス削除後に各カードの表示状態を復元
-        if (playerHand) {
-            const playerCards = playerHand.querySelectorAll('.relative');
-            playerCards.forEach(card => {
-                card.style.opacity = '1';
-                card.style.visibility = 'visible';
-            });
+        // ✅ ハイブリッド方式: 手札はDOM版なのでDOM版アニメーションを使用
+        try {
+            await this.setupManager.animateInitialDraw();
+        } catch (error) {
+            console.error('Failed to animate initial hand draw:', error);
+            // フォールバック: 遅延のみ
+            await this._delay(300);
         }
-        if (cpuHand) {
-            const cpuCards = cpuHand.querySelectorAll('.relative');
-            cpuCards.forEach(card => {
-                card.style.opacity = '1';
-                card.style.visibility = 'visible';
-            });
-        }
-
-        // DOMにクラスの削除が反映されるのを待つ
-        await this._delay(20); // 非常に短い遅延
-
-        const promises = [];
-
-        if (playerHand) {
-            // Select actual card elements inside the hand (skip inner wrapper)
-            const playerCards = Array.from(playerHand.querySelectorAll('.relative'));
-
-            // 各カード要素の詳細を確認
-
-            if (playerCards.length > 0) {
-                promises.push(animate.handDeal(playerCards, 'player'));
-            }
-        }
-
-        if (cpuHand) {
-            const cpuCards = Array.from(cpuHand.querySelectorAll('.relative'));
-
-            // 各カード要素の詳細を確認
-
-            if (cpuCards.length > 0) {
-                promises.push(animate.handDeal(cpuCards, 'cpu'));
-            }
-        }
-
-        await Promise.all(promises);
     }
 
     /**
-     * プレイヤー側サイドカード配置アニメーション
+     * プレイヤー側サイドカード配置アニメーション（Three.js専用）
      */
     async _animatePlayerPrizeCardSetup() {
         // 重複実行防止
-        if (this.prizeAnimationStatus.player) {
+        if (this.animationStatus.prizePlayerDealt) {
             noop('🔄 Player prize card animation already executed, skipping');
             return;
         }
 
-        noop('🎯 Starting PLAYER prize card animation');
+        noop('🎯 Starting PLAYER prize card animation (Three.js mode)');
 
-        // アニメーション用に裏面カードを事前作成
-        await this._createPrizeBackCardsForAnimation('player');
+        // ✅ Three.js専用: サイドカードアニメーションはThree.jsが処理
+        this.animationStatus.prizePlayerDealt = true;
+        noop('✅ Player prize card animation completed (Three.js mode)');
 
-        // プレイヤー側のサイドスロット要素を取得
-        const playerPrizeSlots = document.querySelectorAll('.player-self .side-left .card-slot');
+        // プレイヤー側完了後の状態更新
+        this._updateState(this.state);
 
-        if (playerPrizeSlots.length === 0) {
-            console.warn('⚠️ Player prize slots not found, skipping animation');
-            return;
-        }
-
-        const playerPrizeElements = [];
-        playerPrizeSlots.forEach((slot) => {
-            const cardElement = slot.querySelector('.relative, .card');
-            if (cardElement) {
-                playerPrizeElements.push(cardElement);
-            } else {
-                playerPrizeElements.push(slot); // Fallback to slot if card element not found
-            }
-        });
-
-        // プレイヤー側のみアニメーション実行
-        if (playerPrizeElements.length > 0) {
-            try {
-                const { animateFlow } = await import('./animations/flow.js');
-                await animateFlow.dealPrizesFor('player', playerPrizeElements);
-            } catch (e) {
-                console.error('Prize animation failed:', e);
-            }
-            this.prizeAnimationStatus.player = true;
-            noop('✅ Player prize card animation completed');
-
-            // プレイヤー側完了後の状態更新
-            this._updateState(this.state);
-
-            // 両方完了しているかチェック
-            this._checkBothPrizeAnimationsComplete();
-        } else {
-            console.warn('⚠️ No player prize elements found for animation');
-        }
+        // 両方完了しているかチェック
+        this._checkBothPrizeAnimationsComplete();
     }
 
     /**
@@ -3428,53 +3433,22 @@ export class Game {
         noop('🤖 _animateCPUPrizeCardSetup: Method called');
 
         // 重複実行防止
-        if (this.prizeAnimationStatus.cpu) {
+        if (this.animationStatus.prizeCpuDealt) {
             noop('🔄 _animateCPUPrizeCardSetup: CPU prize card animation already executed, skipping');
             return;
         }
 
-        noop('🎯 _animateCPUPrizeCardSetup: Starting CPU prize card animation');
+        noop('🎯 _animateCPUPrizeCardSetup: Starting CPU prize card animation (Three.js mode)');
 
-        // アニメーション用に裏面カードを事前作成
-        await this._createPrizeBackCardsForAnimation('cpu');
+        // ✅ Three.js専用: サイドカードアニメーションはThree.jsが処理
+        this.animationStatus.prizeCpuDealt = true;
+        noop('✅ CPU prize card animation completed (Three.js mode)');
 
-        // CPU側のサイドスロット要素を取得
-        const cpuPrizeSlots = document.querySelectorAll('.opponent-board .side-right .card-slot');
+        // CPU側完了後の状態更新
+        this._updateState(this.state);
 
-        if (cpuPrizeSlots.length === 0) {
-            console.warn('⚠️ CPU prize slots not found, skipping animation');
-            return;
-        }
-
-        const cpuPrizeElements = [];
-        cpuPrizeSlots.forEach((slot) => {
-            const cardElement = slot.querySelector('.relative, .card');
-            if (cardElement) {
-                cpuPrizeElements.push(cardElement);
-            } else {
-                cpuPrizeElements.push(slot); // Fallback to slot if card element not found
-            }
-        });
-
-        // CPU側のみアニメーション実行
-        if (cpuPrizeElements.length > 0) {
-            try {
-                const { animateFlow } = await import('./animations/flow.js');
-                await animateFlow.dealPrizesFor('cpu', cpuPrizeElements);
-            } catch (e) {
-                console.error('Prize animation failed:', e);
-            }
-            this.prizeAnimationStatus.cpu = true;
-            noop('✅ CPU prize card animation completed');
-
-            // CPU側完了後の状態更新
-            this._updateState(this.state);
-
-            // 両方完了しているかチェック
-            this._checkBothPrizeAnimationsComplete();
-        } else {
-            console.warn('⚠️ No CPU prize elements found for animation');
-        }
+        // 両方完了しているかチェック
+        this._checkBothPrizeAnimationsComplete();
     }
 
     /**
@@ -3496,13 +3470,11 @@ export class Game {
      * 両方のサイドアニメーション完了チェック
      */
     _checkBothPrizeAnimationsComplete() {
-        const { player, cpu } = this.prizeAnimationStatus;
+        const { prizePlayerDealt, prizeCpuDealt } = this.animationStatus;
 
-        noop('🔍 Checking prize animations completion:', { player, cpu });
+        noop('🔍 Checking prize animations completion:', { prizePlayerDealt, prizeCpuDealt });
 
-        if (player && cpu) {
-            // 両側のサイド配布アニメーションが完了
-            this.prizeAnimationCompleted = true; // 互換用フラグも立てる（viewの旧判定回避）
+        if (prizePlayerDealt && prizeCpuDealt) {
             noop('🎉 Both prize animations completed! Showing game start button');
 
             // 両方完了時のメッセージ表示
@@ -3524,11 +3496,11 @@ export class Game {
                 message: '両陣営のサイドカード配布が完了しました！'
             });
 
-        } else if (player && !cpu) {
+        } else if (prizePlayerDealt && !prizeCpuDealt) {
             // プレイヤー完了、CPU待ち
             this.view.showGameMessage('相手の準備を待っています...');
 
-        } else if (!player && cpu) {
+        } else if (!prizePlayerDealt && prizeCpuDealt) {
             // CPU完了、プレイヤー待ち（通常は発生しない）
             this.view.showGameMessage('あなたの配置確定を待っています...');
         }
@@ -3600,19 +3572,14 @@ export class Game {
      * カード配置アニメーション
      */
     async _animateCardPlacement(cardElement, zone, index) {
-        if (!cardElement) return;
+        // ✅ Three.js専用: カード配置アニメーション
+        // cardElementパラメータは互換性のため残すが使用しない
 
-        const cardId = cardElement.dataset.runtimeId || cardElement.dataset.cardId;
-        const card = this.state.players.player.hand.find(c => (c.runtimeId === cardId) || (c.id === cardId));
+        // Three.jsでは状態更新時に自動でカードが正しい位置に移動
+        // アニメーションはthree-view-bridge.jsのrender()で処理される
 
-        await animationManager.createUnifiedCardAnimation(
-            'player',
-            (card.runtimeId || card.id),
-            'hand', // sourceZone is assumed to be hand for this legacy function
-            zone,   // targetZone
-            index,  // targetIndex
-            { card }
-        );
+        // 短い遅延で視覚的フィードバック
+        await new Promise(resolve => setTimeout(resolve, 400));
     }
 
     /**
@@ -3623,14 +3590,14 @@ export class Game {
         const card = playerState.bench[benchIndex];
         if (!card) return;
 
-        await animationManager.createUnifiedCardAnimation(
-            playerId,
-            (card.runtimeId || card.id),
-            'bench',
-            'active',
-            0, // active zone index is always 0
-            { card }
-        );
+        // ✅ Three.js専用: ベンチ→アクティブアニメーション
+        if (this.view?.threeViewBridge?.isActive()) {
+            const runtimeId = card.runtimeId || card.id;
+            await this.view.threeViewBridge.animateCardToActive(runtimeId, 400);
+        }
+
+        // 短い遅延で視覚的フィードバック
+        await new Promise(resolve => setTimeout(resolve, 200));
     }
 
 
@@ -3686,30 +3653,43 @@ export class Game {
      */
     async _animateBattlePokemonPlacement(cardId, targetZone, targetIndex) {
         try {
-            // 準備フェーズのアニメーションシステムを流用
-            const sourceElement = document.querySelector(`[data-runtime-id="${cardId}"]`) ||
-                document.querySelector(`[data-card-id="${cardId}"]`);
-            if (!sourceElement) return;
+            if (this.view?.threeViewBridge?.isActive()) {
+                // ✅ カード配置アニメーション
+                if (targetZone === 'active') {
+                    await this.view.threeViewBridge.animateCardToActive(cardId, 400);
+                } else if (targetZone === 'bench') {
+                    await this.view.threeViewBridge.animateCardToBench(cardId, 400);
+                } else {
+                    await this.view.threeViewBridge.animatePlayCard(cardId, 400);
+                }
 
-            // アニメーション実行（表面で配置）
-            const animationOptions = {
-                isSetupPhase: false,  // バトル中なので false
-                isFaceUp: true,      // 表面で配置
-                duration: 600
-            };
+                // ✅ カードフリップアニメーション（裏→表）
+                await this.view.threeViewBridge.flipCard(cardId, 600);
+            }
 
-            // 統一アニメーションシステムを使用（準備フェーズと同じ）
-            await animationManager.createUnifiedCardAnimation(
-                'player',
-                cardId,
-                'hand',
-                targetZone,
-                targetIndex,
-                animationOptions
-            );
+            await new Promise(resolve => setTimeout(resolve, 200));
 
         } catch (error) {
+            console.error('❌ Battle Pokemon placement animation failed:', error);
             noop(`⚠️ Battle Pokemon placement animation failed: ${error.message}`);
+        }
+    }
+
+    /**
+     * ベンチ→アクティブ昇格アニメーション
+     */
+    async _animateBenchToActive(pokemonId, benchIndex) {
+        try {
+            // ✅ Three.js専用: ベンチ→アクティブ昇格アニメーション
+            if (this.view?.threeViewBridge?.isActive()) {
+                await this.view.threeViewBridge.animateBenchToActive?.(pokemonId, benchIndex, 500);
+            }
+
+            // 短い遅延で視覚的フィードバック
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+        } catch (error) {
+            noop(`⚠️ Bench to active animation failed: ${error.message}`);
             // アニメーション失敗時も処理を続行
         }
     }
@@ -3719,91 +3699,271 @@ export class Game {
      */
     async _animatePrizeTake(playerId, prizeIndex) {
         const playerState = this.state.players[playerId];
-        const card = playerState.prize[prizeIndex]; // This might be null if prize is face down
-        // We need a card object for the animation. If it's not available, we might need to skip.
-        // For now, let's assume we can get the card info.
-        // In a real scenario, the logic would reveal the card before moving it to hand.
-        const placeholderCard = { id: `prize-${prizeIndex}`, name_ja: 'サイドカード', name_en: 'Prize Card' };
+        const card = playerState.prize[prizeIndex];
 
-        await animationManager.createUnifiedCardAnimation(
-            playerId,
-            card ? card.id : placeholderCard.id,
-            'prize',
-            'hand',
-            playerState.hand.length, // Approximate index in hand
-            { card: card || placeholderCard }
-        );
+        try {
+            // ✅ Three.js専用: サイドカード取得アニメーション
+            if (this.view?.threeViewBridge?.isActive()) {
+                // カードのruntimeIdを取得
+                const runtimeId = card?.runtimeId || card?.id || `prize-${prizeIndex}`;
+
+                // Three.jsでサイドカード→手札アニメーション実行
+                await this.view.threeViewBridge.animatePrizeTake?.(runtimeId, 400);
+            }
+
+            // 短い遅延で視覚的フィードバック
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+        } catch (error) {
+            noop(`⚠️ Prize take animation failed: ${error.message}`);
+            // アニメーション失敗時も処理を続行
+        }
     }
 
     // ==================== ハイライト関連メソッド ====================
 
     /**
-     * カードハイライト
+     * カードハイライト（Three.js専用）
+     * @param {string} cardId - カードID
+     * @param {boolean} highlight - ハイライト表示/非表示
+     * @param {Object} options - オプション { type: 'highlight'|'select' }
      */
-    _highlightCard(cardId, highlight = true) {
-        const cardElement = document.querySelector(`[data-runtime-id="${cardId}"]`) ||
-            document.querySelector(`[data-card-id="${cardId}"]`);
-        if (cardElement) {
+    _highlightCard(cardId, highlight = true, options = {}) {
+        // ✅ Three.js専用: Three.jsハイライトシステムを使用
+        if (this.view?.threeViewBridge) {
             if (highlight) {
-                animationManager.highlightCard(cardElement);
+                this.view.threeViewBridge.highlightCard?.(cardId);
             } else {
-                animationManager.unhighlightCard(cardElement);
+                this.view.threeViewBridge.clearCardHighlight?.(cardId);
             }
         }
     }
 
     /**
-     * エネルギー対象ハイライト
+     * エネルギー対象ハイライト（Three.js専用）
      */
     _highlightEnergyTargets(energyType) {
         const player = this.state.players.player;
 
+        // ✅ Three.js専用: スロットハイライトシステムを使用
+        if (!this.view?.threeViewBridge) return;
+
         // アクティブポケモンをチェック
         if (player.active && Logic.canUseEnergy(player.active, energyType)) {
-            const activeCardElement = document.querySelector('.player-self .active-bottom .relative');
-            if (activeCardElement) {
-                animationManager.highlightCard(activeCardElement);
-            }
+            // Three.jsでアクティブスロットをハイライト
+            this.view.threeViewBridge.highlightSlotsByZone?.('active', 'player');
+
+            // カードもハイライト
+            const runtimeId = player.active.runtimeId || player.active.id;
+            this.view.threeViewBridge.setCardHighlighted?.(runtimeId, true);
         }
 
         // ベンチポケモンをチェック
         player.bench.forEach((pokemon, index) => {
             if (pokemon && Logic.canUseEnergy(pokemon, energyType)) {
-                const benchCardElement = document.querySelector(`.player-self .bottom-bench-${index + 1} .relative`);
-                if (benchCardElement) {
-                    animationManager.highlightCard(benchCardElement);
-                }
+                // Three.jsでベンチスロットをハイライト
+                this.view.threeViewBridge.highlightSlotsByZone?.('bench', 'player', index);
+
+                // カードもハイライト
+                const runtimeId = pokemon.runtimeId || pokemon.id;
+                this.view.threeViewBridge.setCardHighlighted?.(runtimeId, true);
             }
         });
     }
 
     /**
-     * ベンチスロットハイライト
+     * ベンチスロットハイライト（Three.js専用）
      */
     _highlightBenchSlots() {
-        const benchCards = document.querySelectorAll('.player-self [class*="bottom-bench-"] .relative');
-        benchCards.forEach(card => {
-            animationManager.highlightCard(card);
-        });
+        // ✅ Three.js専用: 全ベンチスロットをハイライト
+        if (this.view?.threeViewBridge) {
+            this.view.threeViewBridge.highlightSlotsByZone?.('bench', 'player');
+
+            // 既にカードが配置されているベンチポケモンもハイライト
+            const player = this.state.players.player;
+            player.bench.forEach((pokemon, index) => {
+                if (pokemon) {
+                    const runtimeId = pokemon.runtimeId || pokemon.id;
+                    this.view.threeViewBridge.setCardHighlighted?.(runtimeId, true);
+                }
+            });
+        }
     }
 
     /**
-     * 全ハイライト解除
+     * 全ハイライト解除（Three.js専用）
      */
     _clearAllHighlights() {
-        const highlightedCards = document.querySelectorAll('.card-highlighted');
-        highlightedCards.forEach(card => {
-            animationManager.unhighlightCard(card);
-        });
+        // ✅ Three.js専用: ハイライト解除
+        if (this.view?.threeViewBridge) {
+            this.view.threeViewBridge.clearHighlights();
+            this.view.threeViewBridge.clearAllCardHighlights();
+        }
     }
 
     /**
-     * カードハイライト解除
+     * サウンドとインプットマネージャーの初期化
      */
-    _clearCardHighlights() {
-        const selectedCards = document.querySelectorAll('.card-selected');
-        selectedCards.forEach(card => {
-            animationManager.unhighlightCard(card);
+    _setupSoundAndInputManagers() {
+        try {
+            // サウンドマネージャーの初期化 - バトルBGMを再生
+            soundManager.playMusic('battle');
+
+            // インプットマネージャーのキーボードショートカット設定
+            // ターン終了
+            inputManager.on('endTurn', () => {
+                if (this.phaseManager.getCurrentPhase() !== 'SETUP') {
+                    this._handleEndTurn();
+                }
+            });
+
+            // サウンドトグル
+            inputManager.on('toggleSound', () => {
+                const enabled = soundManager.toggle();
+                if (this.view) {
+                    this.view.showCustomToast(
+                        'サウンド: ' + (enabled ? 'ON' : 'OFF'),
+                        enabled ? 'success' : 'info'
+                    );
+                }
+            });
+
+            // 確定アクション（選択中の要素をクリック）
+            inputManager.on('confirm', () => {
+                inputManager.confirmSelection();
+            });
+
+            // キャンセルアクション
+            inputManager.on('cancel', () => {
+                if (modalManager.isModalOpen && modalManager.isModalOpen()) {
+                    modalManager.closeModal();
+                }
+            });
+
+            // ヘルプ表示
+            inputManager.on('showHelp', () => {
+                this._showKeyboardHelp();
+            });
+
+            // 手札の選択可能な要素を更新
+            this._updateSelectableElements();
+
+            console.log('Sound and Input Managers initialized');
+        } catch (error) {
+            console.warn('Failed to initialize sound/input managers:', error);
+        }
+    }
+
+    /**
+     * 選択可能な要素を更新
+     */
+    _updateSelectableElements() {
+        try {
+            const handSlots = Array.from(document.querySelectorAll('#player-hand .hand-slot'));
+            const buttons = Array.from(document.querySelectorAll('.pokemon-action-btn:not(.hidden)'));
+            const selectableElements = [...handSlots, ...buttons];
+            inputManager.updateSelectableElements(selectableElements);
+        } catch (error) {
+            console.warn('Failed to update selectable elements:', error);
+        }
+    }
+
+    /**
+     * キーボードヘルプを表示
+     */
+    _showKeyboardHelp() {
+        const helpContent = `
+            <div class="keyboard-help-panel">
+                <div class="keyboard-help-title">キーボードショートカット</div>
+
+                <div class="keyboard-help-section">
+                    <h3>基本操作</h3>
+                    <div class="keyboard-help-item">
+                        <span class="keyboard-help-key">Enter / Space</span>
+                        <span class="keyboard-help-description">選択を確定</span>
+                    </div>
+                    <div class="keyboard-help-item">
+                        <span class="keyboard-help-key">Esc</span>
+                        <span class="keyboard-help-description">キャンセル</span>
+                    </div>
+                    <div class="keyboard-help-item">
+                        <span class="keyboard-help-key">E</span>
+                        <span class="keyboard-help-description">ターン終了</span>
+                    </div>
+                </div>
+
+                <div class="keyboard-help-section">
+                    <h3>ナビゲーション</h3>
+                    <div class="keyboard-help-item">
+                        <span class="keyboard-help-key">← / A</span>
+                        <span class="keyboard-help-description">左に移動</span>
+                    </div>
+                    <div class="keyboard-help-item">
+                        <span class="keyboard-help-key">→ / D</span>
+                        <span class="keyboard-help-description">右に移動</span>
+                    </div>
+                    <div class="keyboard-help-item">
+                        <span class="keyboard-help-key">↑ / W</span>
+                        <span class="keyboard-help-description">上に移動</span>
+                    </div>
+                    <div class="keyboard-help-item">
+                        <span class="keyboard-help-key">↓ / S</span>
+                        <span class="keyboard-help-description">下に移動</span>
+                    </div>
+                </div>
+
+                <div class="keyboard-help-section">
+                    <h3>カード選択</h3>
+                    <div class="keyboard-help-item">
+                        <span class="keyboard-help-key">1-7</span>
+                        <span class="keyboard-help-description">手札のカードを選択</span>
+                    </div>
+                </div>
+
+                <div class="keyboard-help-section">
+                    <h3>UI操作</h3>
+                    <div class="keyboard-help-item">
+                        <span class="keyboard-help-key">M</span>
+                        <span class="keyboard-help-description">サウンドON/OFF</span>
+                    </div>
+                    <div class="keyboard-help-item">
+                        <span class="keyboard-help-key">H / F1</span>
+                        <span class="keyboard-help-description">ヘルプ表示</span>
+                    </div>
+                    <div class="keyboard-help-item">
+                        <span class="keyboard-help-key">F</span>
+                        <span class="keyboard-help-description">フルスクリーン切替</span>
+                    </div>
+                </div>
+
+                <button class="keyboard-help-close" onclick="document.querySelector('.keyboard-help-overlay').remove()">
+                    閉じる (Esc)
+                </button>
+            </div>
+        `;
+
+        const overlay = document.createElement('div');
+        overlay.className = 'keyboard-help-overlay';
+        overlay.innerHTML = helpContent;
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.remove();
+            }
         });
+
+        document.body.appendChild(overlay);
+    }
+
+    /**
+     * サウンドエフェクトを再生
+     * @param {string} soundName - 再生するサウンド名
+     */
+    _playSound(soundName) {
+        try {
+            soundManager.play(soundName);
+        } catch (error) {
+            console.warn('Failed to play sound:', soundName, error);
+        }
     }
 } // End of Game class

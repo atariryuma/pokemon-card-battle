@@ -4,12 +4,14 @@
  * プレイヤーとCPUのターン進行、制約管理、自動処理を統括
  */
 
-import { animate, animationManager } from './animation-manager.js';
+import { animate } from './animation-manager.js';
 import { CardOrientationManager } from './card-orientation.js';
 import { GAME_PHASES } from './phase-manager.js';
-import { cloneGameState, addLogEntry } from './state.js';
+import { cloneGameState, addLogEntry, updateTurnState } from './state.js';
 import * as Logic from './logic.js';
 import { noop } from './utils.js';
+import { eventBus, GameEventTypes } from './core/event-bus.js';
+import { GAME_CONFIG } from './constants/game-config.js';
 
 /**
  * ターン管理クラス
@@ -17,11 +19,12 @@ import { noop } from './utils.js';
 export class TurnManager {
   constructor() {
     this.turnActions = []; // ターン内でのアクション履歴
+    // CPU思考時間は統一定数から取得
     this.cpuThinkingTime = {
-      min: 500,
-      max: 1500
+      min: GAME_CONFIG.CPU_THINKING.MIN,
+      max: GAME_CONFIG.CPU_THINKING.MAX
     };
-    
+
     // 非同期処理管理
     this.pendingOperations = new Set();
     this.phaseTransitions = [];
@@ -78,10 +81,6 @@ export class TurnManager {
     };
 
     // Legacy ターン制約リセット（互換性のため）
-    newState.hasDrawnThisTurn = false;
-    newState.hasAttachedEnergyThisTurn = false;
-    newState.canRetreat = true;
-    newState.canPlaySupporter = true;
     newState.turnPlayer = 'player';
 
     // 特殊状態処理（毒、火傷など）
@@ -111,9 +110,8 @@ export class TurnManager {
     let newState = cloneGameState(state);
 
     // 自動ドロー（最初のターンのみ選択制、以降は強制）
-    if (!newState.hasDrawnThisTurn) {
+    if (!newState.turnState.hasDrawn) {
       newState = Logic.drawCard(newState, 'player');
-      newState.hasDrawnThisTurn = true;
 
       // ドローアニメーション
       await this.animateCardDraw('player');
@@ -193,7 +191,7 @@ export class TurnManager {
    * エネルギー付与処理
    */
   handleAttachEnergy(state, { energyId, pokemonId }) {
-    if (state.hasAttachedEnergyThisTurn) {
+    if (state.turnState.energyAttached > 0) {
       console.warn('Already attached energy this turn');
       return state;
     }
@@ -312,30 +310,6 @@ export class TurnManager {
 
       ({ attackIndex, attacker } = newState.pendingAction);
       const defender = attacker === 'player' ? 'cpu' : 'player';
-      
-      // DOM要素の安全な取得
-      let defenderElement;
-      try {
-        if (CardOrientationManager && CardOrientationManager.getCardOrientation) {
-          const defenderOrientation = CardOrientationManager.getCardOrientation(defender, 'active');
-          defenderElement = document.querySelector(`${defenderOrientation.playerSelector} ${defender === 'player' ? '.active-bottom' : '.active-top'}`);
-        } else {
-          // フォールバック: 直接セレクタで取得
-          const playerSelector = defender === 'player' ? '.player-self' : '.opponent-board';
-          const slotSelector = defender === 'player' ? '.active-bottom' : '.active-top';
-          defenderElement = document.querySelector(`${playerSelector} ${slotSelector}`);
-        }
-      } catch (orientationError) {
-        console.warn('カード向き取得エラー:', orientationError);
-        // フォールバック処理
-        const playerSelector = defender === 'player' ? '.player-self' : '.opponent-board';
-        const slotSelector = defender === 'player' ? '.active-bottom' : '.active-top';
-        defenderElement = document.querySelector(`${playerSelector} ${slotSelector}`);
-      }
-      
-      if (!defenderElement) {
-        console.warn('防御側の要素が見つかりません。アニメーションなしで攻撃を実行します。');
-      }
 
       noop(`🗡️ ${attacker} attacks ${defender} with attack index ${attackIndex}`);
     
@@ -359,8 +333,7 @@ export class TurnManager {
       message: `${atkMon?.name_ja || '不明'}の「${usedAttack?.name_ja || 'ワザ'}」で${dealt > 0 ? dealt : 0}ダメージ`
     });
 
-    // 攻撃アニメーション（タイプ別エフェクト付き）
-    const attackerElement = document.querySelector(`${this.getPlayerSelector(attacker)} ${this.getActiveSelector(attacker)}`);
+    // ✅ Three.js専用: 攻撃アニメーション（タイプ別エフェクト付き）
     const attackerAfter = newState.players[attacker].active;
     const attack = attackerAfter.attacks[attackIndex];
     const primaryType = attackerAfter.types && attackerAfter.types[0] ? attackerAfter.types[0] : 'Colorless';
@@ -476,10 +449,6 @@ export class TurnManager {
     };
 
     // Legacy フラグもリセット（互換性のため）
-    newState.hasDrawnThisTurn = false;
-    newState.hasAttachedEnergyThisTurn = false;
-    newState.canRetreat = true;
-    newState.canPlaySupporter = true;
 
     newState.phase = GAME_PHASES.CPU_TURN;
     newState.turnPlayer = 'cpu';
@@ -505,10 +474,6 @@ export class TurnManager {
     newState.turn++;
 
     // ターン制約リセット
-    newState.hasDrawnThisTurn = false;
-    newState.hasAttachedEnergyThisTurn = false;
-    newState.canRetreat = true;
-    newState.canPlaySupporter = true;
     newState.turnPlayer = 'cpu';
 
     // 特殊状態処理
@@ -554,7 +519,7 @@ export class TurnManager {
 
     // 2. ドロー
     newState = Logic.drawCard(newState, 'cpu');
-    newState.hasDrawnThisTurn = true;
+    newState = updateTurnState(newState, { hasDrawn: true });
     await this.animateCardDraw('cpu');
     await this.simulateCpuThinking(300);
 
@@ -777,7 +742,7 @@ export class TurnManager {
    */
   async cpuAttachEnergy(state) {
     let newState = cloneGameState(state);
-    if (newState.hasAttachedEnergyThisTurn) {
+    if (newState.turnState.energyAttached > 0) {
       return newState;
     }
 
@@ -1056,7 +1021,7 @@ export class TurnManager {
       const cards = handElement.querySelectorAll('.relative');
       const lastCard = cards.length ? cards[cards.length - 1] : null;
       if (lastCard) {
-        await animationManager.animateDrawCard(lastCard);
+        await animate.cardDraw("player", lastCard);
       }
     }
   }
@@ -1066,7 +1031,7 @@ export class TurnManager {
    */
   async animateAttack(attackerId, state) {
     const defenderId = attackerId === 'player' ? 'cpu' : 'player';
-    await animationManager.createUnifiedAttackAnimation(attackerId, defenderId);
+    await animate.attackSequence("normal", 50, defenderId, { attackerId: attackerId });
   }
 
 
@@ -1079,20 +1044,6 @@ export class TurnManager {
     );
     
     await new Promise(resolve => setTimeout(resolve, thinkTime));
-  }
-
-  /**
-   * プレイヤーセレクタを取得
-   */
-  getPlayerSelector(playerId) {
-    return playerId === 'player' ? '.player-board:not(.opponent-board)' : '.opponent-board';
-  }
-
-  /**
-   * アクティブエリアセレクタを取得
-   */
-  getActiveSelector(playerId) {
-    return playerId === 'player' ? '.active-bottom' : '.active-top';
   }
 
   /**

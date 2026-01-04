@@ -66,115 +66,21 @@
 
     <div class="game-wrapper">
 
+        <!-- ✅ Three.js専用: DOM版ゲームボードは削除 -->
         <div id="game-stage" class="game-stage w-full flex flex-col items-center"
             style="gap: calc(var(--vertical-gap)/2);">
-
-            <div id="game-board">
-                <img class="board-bg" src="assets/playmat/playmat.jpg" alt="Playmat"
-                    onerror="this.style.display='none'" />
-
-                <!-- 相手プレイヤーのフィールド -->
-                <div id="cpu-board" class="player-board opponent-board">
-                    <!-- Active Pokemon -->
-                    <div class="card-slot active-top" data-zone="Active" data-orientation="flipped"></div>
-
-
-                    <!-- Bench Row (5 slots) -->
-                    <div class="card-slot top-bench-1" data-zone="Bench" data-orientation="flipped"></div>
-                    <div class="card-slot top-bench-2" data-zone="Bench" data-orientation="flipped"></div>
-                    <div class="card-slot top-bench-3" data-zone="Bench" data-orientation="flipped"></div>
-                    <div class="card-slot top-bench-4" data-zone="Bench" data-orientation="flipped"></div>
-                    <div class="card-slot top-bench-5" data-zone="Bench" data-orientation="flipped"></div>
-
-                    <!-- Side Cards (6 cards in 3 stacks) -->
-                    <div class="side-cards-container side-right">
-                        <div class="prize-stack prize-stack-1">
-                            <div class="card-slot side-right-1" data-zone="Prize" data-prize-index="0"
-                                data-orientation="flipped"></div>
-                            <div class="card-slot side-right-1-back" data-zone="Prize" data-prize-index="1"
-                                data-orientation="flipped"></div>
-                        </div>
-                        <div class="prize-stack prize-stack-2">
-                            <div class="card-slot side-right-2" data-zone="Prize" data-prize-index="2"
-                                data-orientation="flipped"></div>
-                            <div class="card-slot side-right-2-back" data-zone="Prize" data-prize-index="3"
-                                data-orientation="flipped"></div>
-                        </div>
-                        <div class="prize-stack prize-stack-3">
-                            <div class="card-slot side-right-3" data-zone="Prize" data-prize-index="4"
-                                data-orientation="flipped"></div>
-                            <div class="card-slot side-right-3-back" data-zone="Prize" data-prize-index="5"
-                                data-orientation="flipped"></div>
-                        </div>
-                    </div>
-
-                    <!-- Deck and Discard (these stay upright) -->
-                    <div class="card-slot deck-container top-left-deck" data-zone="Deck" data-orientation="upright">
-                        <div class="deck-stack"></div>
-                    </div>
-                    <div class="card-slot top-left-trash" data-zone="Trash" data-orientation="upright"></div>
-                </div>
-
-                <!-- Stadium Zone (Shared) -->
-                <div class="card-slot stadium-zone" data-zone="Stadium" data-orientation="upright"></div>
-
-                <!-- 自分プレイヤーのフィールド -->
-                <div class="player-board player-self">
-                    <!-- Active Pokemon -->
-                    <div class="card-slot active-bottom" data-zone="Active" data-orientation="upright"></div>
-
-                    <!-- Bench Row (5 slots) -->
-                    <div class="card-slot bottom-bench-1" data-zone="Bench" data-orientation="upright"></div>
-                    <div class="card-slot bottom-bench-2" data-zone="Bench" data-orientation="upright"></div>
-                    <div class="card-slot bottom-bench-3" data-zone="Bench" data-orientation="upright"></div>
-                    <div class="card-slot bottom-bench-4" data-zone="Bench" data-orientation="upright"></div>
-                    <div class="card-slot bottom-bench-5" data-zone="Bench" data-orientation="upright"></div>
-
-                    <!-- Side Cards (6 cards in 3 stacks) -->
-                    <div class="side-cards-container side-left">
-                        <div class="prize-stack prize-stack-1">
-                            <div class="card-slot side-left-1" data-zone="Prize" data-prize-index="0"
-                                data-orientation="upright"></div>
-                            <div class="card-slot side-left-1-back" data-zone="Prize" data-prize-index="1"
-                                data-orientation="upright"></div>
-                        </div>
-                        <div class="prize-stack prize-stack-2">
-                            <div class="card-slot side-left-2" data-zone="Prize" data-prize-index="2"
-                                data-orientation="upright"></div>
-                            <div class="card-slot side-left-2-back" data-zone="Prize" data-prize-index="3"
-                                data-orientation="upright"></div>
-                        </div>
-                        <div class="prize-stack prize-stack-3">
-                            <div class="card-slot side-left-3" data-zone="Prize" data-prize-index="4"
-                                data-orientation="upright"></div>
-                            <div class="card-slot side-left-3-back" data-zone="Prize" data-prize-index="5"
-                                data-orientation="upright"></div>
-                        </div>
-                    </div>
-
-                    <!-- Deck and Discard -->
-                    <div class="card-slot deck-container bottom-right-deck" data-zone="Deck" data-orientation="upright">
-                        <div class="deck-stack"></div>
-                    </div>
-                    <div class="card-slot bottom-right-trash" data-zone="Trash" data-orientation="upright"></div>
-                </div>
-            </div>
+            <!-- Three.jsが#three-containerにレンダリング -->
         </div>
 
-        <!-- CPU Hand Container (Independent) -->
-        <div id="cpu-hand-area-new" class="cpu-hand-independent">
-            <div class="cpu-hand-container">
-                <div id="cpu-hand" class="cpu-hand-scaling" data-owner="cpu" data-zone="hand">
-                    <!-- CPU手札はここに動的に追加されます -->
-                </div>
-            </div>
+        <!-- ✅ ハイブリッド方式: 手札はDOM/CSS版（標準的なTCG方式）、ボードは3D -->
+        <!-- CPU Hand (top) -->
+        <div id="cpu-hand-container" class="hand-container cpu-hand-container">
+            <!-- CPU hand cards rendered here -->
         </div>
 
-        <!-- Player Hand Container -->
-        <div id="player-hand-container">
-            <div id="player-hand" class="hand-dock">
-                <!-- プレイヤーの手札はここに動的に追加されます -->
-            </div>
+        <!-- Player Hand (bottom) -->
+        <div id="player-hand-container" class="hand-container player-hand-container">
+            <!-- Player hand cards rendered here -->
         </div>
 
         <!-- Game Footer with HUD -->
@@ -295,43 +201,9 @@
             console.debug = () => { };
             window.noop = () => { };
         }
+        // ✅ Three.js専用モード: プレイマットデータのみ読み込み
         document.addEventListener('DOMContentLoaded', async () => {
-            // 手札カードのクリック処理とアクティブ化
-            function setupHandCardInteraction() {
-                const handContainer = document.getElementById('player-hand-container');
-                const handSlots = document.querySelectorAll('#player-hand .hand-slot');
-
-                // 手札カードクリック処理
-                handSlots.forEach(slot => {
-                    slot.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        // 既存のアクティブを解除
-                        handSlots.forEach(s => s.classList.remove('active'));
-                        // クリックしたカードをアクティブに
-                        slot.classList.add('active');
-                    });
-                });
-
-                // コンテナ空白部分のクリック透過処理
-                handContainer.addEventListener('click', (e) => {
-                    // 空白部分のクリックは下の要素に透過
-                    if (e.target === handContainer || e.target.id === 'player-hand') {
-                        const elementBelow = document.elementFromPoint(e.clientX, e.clientY - 1);
-                        if (elementBelow && elementBelow !== handContainer) {
-                            elementBelow.click();
-                        }
-                    }
-                });
-            }
-
-            const gameBoard = document.getElementById('game-board');
-            const bgImage = document.querySelector('.board-bg');
-            const playerBoards = {
-                self: document.querySelector('.player-board.player-self'),
-                opponent: document.querySelector('.player-board.opponent-board')
-            };
-
-            // JSONからプレイマットのスロット情報を読み込み
+            // JSONからプレイマットのスロット情報を読み込み（Three.js用）
             let data = null;
             try {
                 const res = await fetch('./assets/playmat/playmat_slots_named.json');
@@ -339,204 +211,13 @@
                     throw new Error(`HTTP ${res.status}: ${res.statusText}`);
                 }
                 data = await res.json();
-                window.playmatSlotsData = data; // Make it globally accessible
+                window.playmatSlotsData = data; // Three.jsがアクセス
                 console.log('✅ Playmat slot data loaded successfully');
             } catch (e) {
                 console.error('❌ Failed to load playmat slot data:', e);
                 console.warn('⚠️ Using fallback layout without slot positioning');
-                return; // GitHub Pages環境での動作を継続
-            }
-            if (!data) {
-                console.warn('⚠️ No playmat data available, using default layout');
                 return;
             }
-
-            const imgSize = data.image_size || { width: 679, height: 679 };
-            const cardSize = (data.card_median_size) || { width: 74, height: 103 };
-            const named = Array.isArray(data.slots_named) ? data.slots_named : [];
-
-            const find = (name) => named.find(s => s.name === name);
-            const rectFrom = (slot) => ({ x: slot.bbox.x_min, y: slot.bbox.y_min, width: slot.size.width, height: slot.size.height });
-
-            const coordsSelf = {};
-            const coordsOpp = {};
-            const coordsShared = {};
-
-            // Bench slots (exact coordinates from playmat)
-            for (let i = 1; i <= 5; i++) {
-                const bottomBench = find(`bottom_bench_${i}`);
-                const topBench = find(`top_bench_${i}`);
-                if (bottomBench) coordsSelf[`bottom-bench-${i}`] = rectFrom(bottomBench);
-                if (topBench) coordsOpp[`top-bench-${i}`] = rectFrom(topBench);
-            }
-
-            // Active pokemon areas (exact coordinates)
-            const activeBottom = find('active_bottom');
-            const activeTop = find('active_top');
-            if (activeBottom) coordsSelf['active-bottom'] = rectFrom(activeBottom);
-            if (activeTop) coordsOpp['active-top'] = rectFrom(activeTop);
-
-            // Side cards (exact coordinates for 3 slots each)
-            for (let i = 1; i <= 3; i++) {
-                const leftSide = find(`side_left_${i}`);
-                const rightSide = find(`side_right_${i}`);
-                if (leftSide) coordsSelf[`side-left-${i}`] = rectFrom(leftSide);
-                if (rightSide) coordsOpp[`side-right-${i}`] = rectFrom(rightSide);
-            }
-
-            // Deck and discard areas (exact coordinates)
-            const bottomRightDeck = find('bottom_right_deck');
-            const bottomRightTrash = find('bottom_right_trash');
-            const topLeftDeck = find('top_left_deck');
-            const topLeftTrash = find('top_left_trash');
-            if (bottomRightDeck) coordsSelf['bottom-right-deck'] = rectFrom(bottomRightDeck);
-            if (bottomRightTrash) coordsSelf['bottom-right-trash'] = rectFrom(bottomRightTrash);
-            if (topLeftDeck) coordsOpp['top-left-deck'] = rectFrom(topLeftDeck);
-            if (topLeftTrash) coordsOpp['top-left-trash'] = rectFrom(topLeftTrash);
-
-            // Stadium (shared zone)
-            const stadium = find('stadium');
-            if (stadium) coordsShared['stadium-zone'] = rectFrom(stadium);
-
-            function buildCoordsCSS(map, scopeSelector) {
-                if (!map) return '';
-                const DEBUG_MODE = true;
-                const PLAYMAT_WIDTH = (imgSize && imgSize.width) ? imgSize.width : 679;
-                const PLAYMAT_HEIGHT = (imgSize && imgSize.height) ? imgSize.height : 679;
-                const transformedCoords = [];
-                let css = '';
-                for (const [key, coords] of Object.entries(map)) {
-                    const leftPct = (coords.x / PLAYMAT_WIDTH) * 100;
-                    const topPct = (coords.y / PLAYMAT_HEIGHT) * 100;
-                    const widthPct = (coords.width / PLAYMAT_WIDTH) * 100;
-                    const heightPct = (coords.height / PLAYMAT_HEIGHT) * 100;
-                    if (coords.width < 10 || coords.height < 10) {
-                        console.warn(`⚠️ Suspiciously small size for ${key}: ${coords.width.toFixed(1)}x${coords.height.toFixed(1)}`);
-                    }
-                    transformedCoords.push({ key, leftPct, topPct, widthPct, heightPct });
-                    // Determine z-index based on scope
-                    const zIndex = scopeSelector.includes('player-self') ? 'var(--z-board)' :
-                        scopeSelector.includes('opponent-board') ? 'var(--z-board)' :
-                            'var(--z-placeholder)';
-                    css += `${scopeSelector} .${key}{position:absolute!important;left:${leftPct}%;top:${topPct}%;width:${widthPct}%;height:${heightPct}%;display:block!important;opacity:1!important;pointer-events:auto!important;cursor:pointer!important;z-index:${zIndex}!important;}
-`;
-                    if (key.startsWith('side-left-') || key.startsWith('side-right-')) {
-                        const dxPx = key.startsWith('side-left-') ? -4 : 4;
-                        const dyPx = 3;
-                        const dxPct = (dxPx / PLAYMAT_WIDTH) * 100;
-                        const dyPct = (dyPx / PLAYMAT_HEIGHT) * 100;
-                        css += `${scopeSelector} .${key}-back{position:absolute!important;left:${leftPct + dxPct}%;top:${topPct + dyPct}%;width:${widthPct}%;height:${heightPct}%;display:block!important;opacity:1!important;pointer-events:auto!important;cursor:pointer!important;z-index:${zIndex}!important;}
-`;
-                    }
-                    if (DEBUG_MODE && (key.includes('bottom-bench') || key.includes('active-bottom'))) {
-                        // 座標情報はデバッグシステムで出力
-                    }
-                }
-                // 変換情報はデバッグシステムで出力
-                return css;
-            }
-
-            function updateDeckHeight(deckElement, cardCount) {
-                if (!deckElement) return;
-                const stack = deckElement.querySelector('.deck-stack');
-                if (!stack) return;
-
-                // Calculate height based on card count (max 60 cards, max 20px height)
-                const maxHeight = 20;
-                const height = Math.min(maxHeight, Math.max(2, cardCount * 0.3));
-
-                // Update the pseudo-elements for stacking effect
-                const before = stack.style;
-                before.setProperty('--deck-height', `${height}px`);
-            }
-
-            function updateLayout() {
-                // CSS文字列を生成してスタイルタグに適用（完全CSS管理）
-                // インラインstyleのtransform系のみ除去（pointer-eventsは維持）
-                const allSlots = document.querySelectorAll('#game-board .card-slot');
-                allSlots.forEach(el => {
-                    // インラインスタイルを完全に削除してCSSに制御を任せる
-                    el.style.removeProperty('transform');
-                    el.style.removeProperty('left');
-                    el.style.removeProperty('top');
-                    el.style.removeProperty('width');
-                    el.style.removeProperty('height');
-                    // pointer-events, z-index等は保持してクリック機能を維持
-                });
-
-                let css = '';
-                css += buildCoordsCSS(coordsSelf, '#game-board .player-board.player-self') || '';
-                css += buildCoordsCSS(coordsOpp, '#game-board .player-board.opponent-board') || '';
-                css += buildCoordsCSS(coordsShared, '#game-board') || '';
-                let styleTag = document.getElementById('slot-style-generated');
-                if (!styleTag) {
-                    styleTag = document.createElement('style');
-                    styleTag.id = 'slot-style-generated';
-                    document.head.appendChild(styleTag);
-                }
-                styleTag.textContent = css;
-
-                // 注: プレースホルダーの data-orientation は HTML に直接設定済み
-                // 動的に配置されるカードのみ CardOrientationManager で設定する
-
-                // 手札インタラクション設定
-                setupHandCardInteraction();
-
-                // デッキ高さ更新処理（ゲーム状態連携時に実装）
-                const playerDeck = playerBoards.self?.querySelector('.deck-container');
-                const opponentDeck = playerBoards.opponent?.querySelector('.deck-container');
-                if (typeof updateDeckHeight === 'function') {
-                    updateDeckHeight(playerDeck, 40);
-                    updateDeckHeight(opponentDeck, 35);
-                }
-
-                // Debug instrumentation removed
-            }
-
-            // 初期化処理：背景画像とDOMの準備完了を待つ
-            function initializeLayout() {
-                // プレイマット初期化
-
-                // RequestAnimationFrameで次の描画フレームを待つ（ベストプラクティス）
-                requestAnimationFrame(() => {
-                    updateLayout();
-                    // プレイマットレイアウト初期化完了
-                });
-            }
-
-            // 背景画像の状態を確認してレイアウト開始
-            if (bgImage) {
-                if (bgImage.complete && bgImage.naturalHeight > 0) {
-                    // 画像が既に読み込み済み
-                    // プレイマット画像読み込み済み
-                    initializeLayout();
-                } else {
-                    // 画像の読み込み完了を待つ
-                    noop('⏳ Waiting for playmat image to load...');
-                    bgImage.addEventListener('load', () => {
-                        noop('📸 Playmat image loaded successfully');
-                        initializeLayout();
-                    }, { once: true });
-
-                    bgImage.addEventListener('error', () => {
-                        console.error('❌ Failed to load playmat image');
-                        initializeLayout(); // 画像なしでも配置は実行
-                    }, { once: true });
-                }
-            } else {
-                console.warn('⚠️ Background image element not found');
-                initializeLayout();
-            }
-
-            // リサイズ時の処理（デバウンス付き）
-            let resizeTimeout;
-            window.addEventListener('resize', () => {
-                clearTimeout(resizeTimeout);
-                resizeTimeout = setTimeout(() => {
-                    noop('🔄 Window resized, updating layout...');
-                    updateLayout();
-                }, 100);
-            });
 
             // カードエディタボタンのイベントハンドラ
             const cardEditorButton = document.getElementById('card-editor-button-float');
@@ -694,6 +375,9 @@
             document.body.appendChild(errorModal);
         }
     </script>
+    <!-- Howler.js for sound effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js"></script>
+
 </body>
 
 </html>

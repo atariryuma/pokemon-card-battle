@@ -18,6 +18,9 @@ export class InteractionHandler {
         this.raycaster = new THREE.Raycaster();
         this.mouse = new THREE.Vector2();
 
+        // ゲーム状態への参照（ターンチェック用）
+        this.gameState = null;
+
         // インタラクティブオブジェクトのリスト
         this.interactiveObjects = [];
 
@@ -36,14 +39,26 @@ export class InteractionHandler {
         this.draggedObject = null;
         this.dragStartPosition = new THREE.Vector3();
         this.dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Y=0平面
+        // クリックイベントのデバウンス（重複防止）
+        this.clickDebounceTime = 300; // 300ms
+        this.lastClickTime = 0;
+
 
         // イベントバインド
         this._boundHandleClick = this._handleClick.bind(this);
         this._boundHandleMouseMove = this._handleMouseMove.bind(this);
         this._boundHandleMouseDown = this._handleMouseDown.bind(this);
         this._boundHandleMouseUp = this._handleMouseUp.bind(this);
+        this._boundHandleMouseLeave = this._handleMouseLeave.bind(this);
 
         this._bindEvents();
+    }
+
+    /**
+     * ゲーム状態を設定（ターンチェック用）
+     */
+    setGameState(gameState) {
+        this.gameState = gameState;
     }
 
     /**
@@ -54,6 +69,7 @@ export class InteractionHandler {
         this.canvas.addEventListener('mousemove', this._boundHandleMouseMove, true);
         this.canvas.addEventListener('mousedown', this._boundHandleMouseDown, true);
         this.canvas.addEventListener('mouseup', this._boundHandleMouseUp, true);
+        this.canvas.addEventListener('mouseleave', this._boundHandleMouseLeave, true);
     }
 
     /**
@@ -73,10 +89,18 @@ export class InteractionHandler {
         return this.raycaster.intersectObjects(this.interactiveObjects, true);
     }
 
+
     /**
      * クリックハンドラ
      */
     _handleClick(event) {
+        // デバウンス処理: 短時間での重複クリックを防止
+        const now = Date.now();
+        if (now - this.lastClickTime < this.clickDebounceTime) {
+            return;
+        }
+        this.lastClickTime = now;
+
         this._normalizeMousePosition(event);
         const intersects = this._getIntersects();
 
@@ -112,7 +136,8 @@ export class InteractionHandler {
                 if (this.hoveredObject && this.onHoverCallback) {
                     this.onHoverCallback({
                         object: this.hoveredObject,
-                        isHovered: false
+                        isHovered: false,
+                        userData: this.hoveredObject.userData || {}
                     });
                 }
 
@@ -131,7 +156,8 @@ export class InteractionHandler {
             if (this.hoveredObject && this.onHoverCallback) {
                 this.onHoverCallback({
                     object: this.hoveredObject,
-                    isHovered: false
+                    isHovered: false,
+                    userData: this.hoveredObject.userData || {}
                 });
                 this.hoveredObject = null;
             }
@@ -145,82 +171,35 @@ export class InteractionHandler {
 
     /**
      * マウスダウンハンドラ（ドラッグ開始）
+     * ✅ ドラッグ機能を無効化：クリックのみ使用
      */
     _handleMouseDown(event) {
-        if (event.button !== 0) return; // 左クリックのみ
-
-        this._normalizeMousePosition(event);
-        const intersects = this._getIntersects();
-
-        if (intersects.length > 0) {
-            const firstHit = intersects[0];
-            const object = this._findInteractiveParent(firstHit.object);
-
-            // ドラッグ可能なオブジェクト（カード）のみ
-            if (object && object.userData?.type === 'card' && object.userData?.isDraggable !== false) {
-                this.isDragging = true;
-                this.draggedObject = object;
-                this.dragStartPosition.copy(object.position);
-
-                // ドラッグ平面をオブジェクトの高さに設定
-                this.dragPlane.constant = -object.position.y;
-
-                if (this.onDragStartCallback) {
-                    this.onDragStartCallback({
-                        object,
-                        userData: object.userData,
-                        startPosition: this.dragStartPosition.clone()
-                    });
-                }
-
-                this.canvas.style.cursor = 'grabbing';
-            }
-        }
+        // ✅ ドラッグ機能は完全に無効化
+        return;
     }
 
     /**
      * マウスアップハンドラ（ドラッグ終了/ドロップ）
+     * ✅ ドラッグ機能を無効化：クリックのみ使用
      */
     _handleMouseUp(event) {
-        if (!this.isDragging || !this.draggedObject) return;
+        // ✅ ドラッグ機能は完全に無効化
+        return;
+    }
 
-        this._normalizeMousePosition(event);
-
-        // ドロップ先を検出（スロットを優先）
-        const intersects = this._getIntersects();
-        let dropTarget = null;
-
-        for (const hit of intersects) {
-            const obj = this._findInteractiveParent(hit.object);
-            if (obj && obj !== this.draggedObject && obj.userData?.type === 'slot') {
-                dropTarget = obj;
-                break;
-            }
-        }
-
-        if (this.onDropCallback) {
-            this.onDropCallback({
-                draggedObject: this.draggedObject,
-                dragData: this.draggedObject.userData,
-                dropTarget,
-                dropTargetData: dropTarget?.userData || null,
-                startPosition: this.dragStartPosition.clone()
+    /**
+     * マウスリーブハンドラ（キャンバスから出た時）
+     */
+    _handleMouseLeave(event) {
+        // ✅ ホバー状態をクリア
+        if (this.hoveredObject && this.onHoverCallback) {
+            this.onHoverCallback({
+                object: this.hoveredObject,
+                isHovered: false,
+                userData: this.hoveredObject.userData || {}
             });
+            this.hoveredObject = null;
         }
-
-        // ドラッグ終了コールバック
-        if (this.onDragEndCallback) {
-            this.onDragEndCallback({
-                object: this.draggedObject,
-                userData: this.draggedObject.userData,
-                dropped: !!dropTarget
-            });
-        }
-
-        // 状態リセット
-        this.isDragging = false;
-        this.draggedObject = null;
-        this.canvas.style.cursor = 'default';
     }
 
     /**
@@ -320,6 +299,7 @@ export class InteractionHandler {
         this.canvas.removeEventListener('mousemove', this._boundHandleMouseMove);
         this.canvas.removeEventListener('mousedown', this._boundHandleMouseDown);
         this.canvas.removeEventListener('mouseup', this._boundHandleMouseUp);
+        this.canvas.removeEventListener('mouseleave', this._boundHandleMouseLeave);
 
         this.interactiveObjects = [];
         this.onClickCallback = null;
@@ -329,6 +309,7 @@ export class InteractionHandler {
         this.onDropCallback = null;
         this.isDragging = false;
         this.draggedObject = null;
+        this.hoveredObject = null;
     }
 }
 

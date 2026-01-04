@@ -208,20 +208,6 @@ export function addLogEntry(state, entry) {
     return newState;
 }
 
-/**
- * 互換性レイヤー: レガシーフィールドからturnStateへの移行サポート
- *
- * 古いコードがレガシーフィールドにアクセスした場合、
- * 自動的にturnStateの値を返す
- */
-export function getTurnStateCompat(state) {
-    return {
-        hasDrawnThisTurn: state.turnState?.hasDrawn ?? false,
-        hasAttachedEnergyThisTurn: state.turnState?.energyAttached > 0,
-        canRetreat: state.turnState?.canRetreat ?? true,
-        canPlaySupporter: state.turnState?.canPlaySupporter ?? true,
-    };
-}
 
 /**
  * turnStateを安全に更新する（Immutability保証）

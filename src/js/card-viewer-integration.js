@@ -371,7 +371,6 @@
       updateImagePlaceholders(getLastUploadedImageExt() || 'png', getLastUploadedImageUrl() || undefined);
       installHotkeys();
       installButtons();
-      console.log('Card viewer integration ready');
     });
   }
 

@@ -548,6 +548,33 @@
     100% { transform: scale(1); box-shadow: 0 0 0 rgba(255, 215, 0, 0); }
 }
 
+/* ✅ 選択状態アニメーション（GPU最適化） */
+@keyframes select-show {
+    0% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.12);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1.08);
+    }
+}
+
+@keyframes select-hide {
+    0% {
+        opacity: 1;
+        transform: scale(1.08);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
 /* === アニメーションクラス === */
 .game-start-flash { animation: gameStartFlash var(--anim-slow) ease-out; }
 .turn-ending { animation: turnEnding var(--anim-normal) ease-out; opacity: 0.7; }
@@ -645,5 +672,9 @@
 
 .animate-highlight-show { animation: highlight-show 0.3s ease-out forwards; }
 .animate-highlight-hide { animation: highlight-hide 0.3s ease-out forwards; }
+
+/* ✅ 選択状態アニメーション */
+.anim-select-show { animation: select-show 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.anim-select-hide { animation: select-hide 0.2s ease-out forwards; }
 
 .deck-card-element.is-drawing { animation: deckLift var(--anim-fast) ease-out forwards; }

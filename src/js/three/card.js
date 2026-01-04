@@ -53,7 +53,7 @@ export class Card3D {
         this.breathingEnabled = false;
         this.breathingPhase = Math.random() * Math.PI * 2; // ランダムな初期位相
         this.breathingSpeed = 0.8 + Math.random() * 0.4;   // 0.8〜1.2の速度バリエーション
-        this.breathingAmplitude = 3;  // 上下の振幅
+        this.breathingAmplitude = 2.5;  // 上下の振幅（業界標準：より微妙に）
 
         // エフェクト用
         this.isSelected = false;
@@ -125,6 +125,8 @@ export class Card3D {
 
         // ユーザーデータを設定
         this.mesh.userData = this.userData;
+        // ✅ ホバー効果用の初期値を設定
+        this.mesh.userData.hoverLiftY = 0;
 
         // 初期位置
         this.mesh.position.set(0, 0, 0);
@@ -174,7 +176,7 @@ export class Card3D {
     }
 
     /**
-     * カードを裏向きにする
+     * カードを裏向きにする（即座）
      */
     showBack() {
         if (this.mesh) {
@@ -185,7 +187,7 @@ export class Card3D {
     }
 
     /**
-     * カードを表向きにする
+     * カードを表向きにする（即座）
      */
     showFront() {
         if (this.mesh) {
@@ -195,16 +197,55 @@ export class Card3D {
     }
 
     /**
+     * カードをアニメーション付きでフリップ（裏→表 または 表→裏）
+     * @param {number} duration - アニメーション時間（ミリ秒）
+     * @returns {Promise} アニメーション完了時に解決
+     */
+    async flip(duration = 600) {
+        if (!this.mesh) return Promise.resolve();
+
+        const startRotation = this.mesh.rotation.y;
+        const targetRotation = this.isFlipped ? 0 : Math.PI;
+        const startTime = Date.now();
+
+        return new Promise((resolve) => {
+            const animate = () => {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                // イージング関数（ease-in-out）
+                const eased = progress < 0.5
+                    ? 2 * progress * progress
+                    : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+
+                this.mesh.rotation.y = startRotation + (targetRotation - startRotation) * eased;
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    this.mesh.rotation.y = targetRotation;
+                    this.isFlipped = !this.isFlipped;
+                    resolve();
+                }
+            };
+
+            animate();
+        });
+    }
+
+    /**
      * ホバー効果
      */
     setHovered(isHovered) {
         if (this.mesh) {
-            const scale = isHovered ? 1.1 : 1.0;
+            const scale = isHovered ? 1.2 : 1.0;  // 業界標準：20%拡大
             this.mesh.scale.set(scale, scale, scale);
 
-            // 少し浮かせる
-            const liftY = isHovered ? 10 : 0;
-            this.mesh.position.y = this.mesh.userData.baseY + liftY;
+            // ✅ ホバー時のY軸オフセットをuserDataに保存（呼吸アニメーションと共存）
+            this.mesh.userData.hoverLiftY = isHovered ? 20 : 0;  // 業界標準：20px上昇
+
+            // ✅ ホバー時は呼吸を停止（業界標準のベストプラクティス）
+            this.breathingEnabled = !isHovered;
         }
     }
 
@@ -231,6 +272,7 @@ export class Card3D {
      * @param {number} time - 経過時間（秒）
      */
     updateBreathing(time) {
+        // ✅ ホバー時は setHovered() で breathingEnabled が false になる（業界標準）
         if (!this.breathingEnabled || !this.mesh) return;
 
         const baseY = this.mesh.userData.baseY || 0;
@@ -238,7 +280,9 @@ export class Card3D {
         // サイン波で自然な上下動
         const breathOffset = Math.sin(time * this.breathingSpeed + this.breathingPhase) * this.breathingAmplitude;
 
-        this.mesh.position.y = baseY + breathOffset;
+        // ✅ ホバー時のリフトオフセットを追加（ホバー効果と共存）
+        const hoverLiftY = this.mesh.userData.hoverLiftY || 0;
+        this.mesh.position.y = baseY + breathOffset + hoverLiftY;
     }
 
     /**

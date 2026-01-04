@@ -1,6 +1,6 @@
 import { getCardImagePath } from './data-manager.js';
 import { CardOrientationManager } from './card-orientation.js';
-import { animationManager } from './animation-manager.js';
+import { animate } from './animation-manager.js';
 import { GAME_PHASES } from './phase-manager.js';
 import { BUTTON_IDS, CONTAINER_IDS, CSS_CLASSES } from './ui-constants.js';
 import { errorHandler } from './error-handler.js';
@@ -8,11 +8,12 @@ import { modalManager } from './modal-manager.js';
 import { ToastMessenger } from './toast-messages.js';
 import { gameLogger } from './game-logger.js';
 import { noop, EventListenerManager } from './utils.js';
-import { BoardEventHandler } from './view/board-event-handler.js';
+// ✅ Three.js専用: BoardEventHandlerは削除（Three.jsが直接イベント処理）
 import { threeViewBridge } from './three-view-bridge.js';
+import { eventBus, GameEventTypes } from './core/event-bus.js';
 
 // Z-index定数 (CSS変数と連携) - 最小限に削減
-import { LEGACY_Z_INDEX as Z_INDEX, ZIndexManager } from './z-index-constants.js';
+import { Z_INDEX, ZIndexManager } from './z-index-constants.js';
 
 export class View {
     constructor(rootEl) {
@@ -22,9 +23,7 @@ export class View {
         // メモリリーク対策: イベントリスナー管理
         this.eventListenerManager = new EventListenerManager();
 
-        // Board containers
-        this.playerBoard = rootEl.querySelector('.player-board:not(.opponent-board)');
-        this.opponentBoard = rootEl.querySelector('.opponent-board');
+        // ✅ Three.js専用: DOM版board containersは不要
 
         // 差分レンダリング用キャッシュ
         this.lastRenderedState = null;
@@ -46,55 +45,12 @@ export class View {
 
 
 
-        // Hand containers
-        this.playerHand = document.getElementById('player-hand');
-        this.cpuHand = document.getElementById('cpu-hand');
+        // ✅ ハイブリッド方式: 手札はDOM/CSS版（標準的なTCG方式）
+        this.playerHand = document.getElementById('player-hand-container');
+        this.cpuHand = document.getElementById('cpu-hand-container');
 
-        // CPU手札を更新（プレイマット統合済み）
-        this.cpuHand = document.getElementById('cpu-hand');
-        if (this.cpuHand) {
-            this.cpuHand.classList.add('cpu-hand-scaling');
-        }
-
-        // イベントハンドラーを保存（メモリリーク対策）
-        this._handClickHandler = this._handleHandClickDelegation.bind(this);
-        this._handMouseEnterHandler = (e) => gameLogger.logHoverEvent(e.target, true);
-        this._handMouseLeaveHandler = (e) => gameLogger.logHoverEvent(e.target, false);
-
-        // 手札エリア全体のクリック保護
-        if (this.playerHand) {
-            this.eventListenerManager.add(this.playerHand, 'click', this._handClickHandler);
-            this.eventListenerManager.add(this.playerHand, 'mouseenter', this._handMouseEnterHandler);
-            this.eventListenerManager.add(this.playerHand, 'mouseleave', this._handMouseLeaveHandler);
-            gameLogger.logGameEvent('INFO', 'プレイヤー手札クリック・ホバー判定を有効化');
-        } else {
-            gameLogger.logGameEvent('ERROR', 'プレイヤー手札要素が見つかりません');
-        }
-
-        // プレイマットのイベント委譲システム（3D対応 - game-stageでキャプチャ）
-        const gameStage = document.getElementById('game-stage');
-        const gameBoard = document.getElementById('game-board');
-        const eventTarget = gameStage || gameBoard; // 3D transform の外でキャプチャ
-
-        if (eventTarget) {
-            // BoardEventHandler で全イベントを委譲処理
-            this.boardEventHandler = new BoardEventHandler(eventTarget, (clickInfo, slot, event) => {
-                // ログ出力
-                gameLogger.logClickEvent(slot, `${clickInfo.zone} - ${clickInfo.owner}`);
-
-                // cardClickHandler に委譲（zone を小文字に正規化）
-                if (this.cardClickHandler) {
-                    this.cardClickHandler({
-                        owner: clickInfo.owner,
-                        zone: clickInfo.zone.toLowerCase(), // game.js は小文字を期待
-                        index: clickInfo.index,
-                        cardId: clickInfo.runtimeId || clickInfo.cardId,
-                        runtimeId: clickInfo.runtimeId
-                    });
-                }
-            });
-            gameLogger.logGameEvent('INFO', `BoardEventHandler によるイベント委譲を有効化 (${eventTarget.id})`);
-        }
+        // ✅ Three.js専用: イベント処理はThree.jsのInteractionHandlerが担当
+        // BoardEventHandlerは削除済み
 
         // レイヤー競合の解決: CPU手札と相手フィールドのz-index関係を検証
         this.validateLayerHierarchy();
@@ -137,16 +93,9 @@ export class View {
         this.threeViewBridge = threeViewBridge;
         this.use3DView = true;  // Three.js を使用するかどうか
 
-        // Initialize Mac Dock–style magnification for player's hand (delayed)
-        // HoverManagerと統合してz-index管理を最適化
-        setTimeout(() => {
-            this._initHandDock();
-            this._initCpuHandDock(); // CPU手札にもMac Dock効果を適用
-            // デバッグ関数を自動実行（問題調査用）
-            setTimeout(() => this.debugHandZIndexIssue(), 1000);
-            // グローバルデバッグ関数として公開
-            window.debugHandZIndex = () => this.debugHandZIndexIssue();
-        }, 1000);
+        // ✅ Three.js専用: DOM Dockエフェクトは使用しない
+        // グローバルデバッグ関数として公開のみ（自動実行なし）
+        window.debugHandZIndex = () => this.debugHandZIndexIssue();
     }
 
     /**
@@ -166,6 +115,10 @@ export class View {
                 if (this.cardClickHandler) {
                     this.threeViewBridge.bindCardClick(this.cardClickHandler);
                 }
+
+                // ✅ イベント駆動: EventBusリスナーを登録
+                this._setupEventListeners();
+
                 gameLogger.logGameEvent('INFO', '🎮 Three.js 3D View initialized');
             }
             return success;
@@ -174,6 +127,64 @@ export class View {
             this.use3DView = false;
             return false;
         }
+    }
+
+    /**
+     * ✅ イベント駆動アーキテクチャ: EventBusリスナーを登録
+     */
+    _setupEventListeners() {
+        // 状態更新イベントをリッスン（リアクティブなUI更新）
+        eventBus.on(GameEventTypes.STATE_UPDATED, (data) => {
+            // 差分レンダリングで効率的に更新
+            this.render(data.state);
+        });
+
+        // ゲーム開始イベント
+        eventBus.on(GameEventTypes.GAME_STARTED, (data) => {
+            console.log(`📡 EventBus: Game started - First player: ${data.firstPlayer}`);
+        });
+
+        // ターン開始イベント
+        eventBus.on(GameEventTypes.TURN_STARTED, (data) => {
+            console.log(`📡 EventBus: Turn started - Player: ${data.turnPlayer}, Turn #${data.turnNumber}`);
+        });
+
+        // フェーズ変更イベントをリッスン
+        eventBus.on(GameEventTypes.PHASE_CHANGED, (data) => {
+            console.log(`📡 EventBus: Phase changed ${data.oldPhase} → ${data.newPhase}`);
+        });
+
+        // カードドローイベント
+        eventBus.on(GameEventTypes.CARD_DRAWN, (data) => {
+            console.log(`📡 EventBus: Card drawn by ${data.playerId}: ${data.cardId}`);
+        });
+
+        // カードプレイイベント
+        eventBus.on(GameEventTypes.CARD_PLAYED, (data) => {
+            console.log(`📡 EventBus: Card played - ${data.cardId} (${data.cardType}) → ${data.toZone}`);
+        });
+
+        // エネルギー付与イベント
+        eventBus.on(GameEventTypes.ENERGY_ATTACHED, (data) => {
+            console.log(`📡 EventBus: Energy attached - ${data.energyId} → ${data.pokemonId}`);
+        });
+
+        // 攻撃イベントをリッスン（ログ記録用）
+        eventBus.on(GameEventTypes.ATTACK_DECLARED, (data) => {
+            console.log(`📡 EventBus: Attack ${data.attackerId} → ${data.targetId}, damage=${data.damage}`);
+        });
+
+        // ダメージイベントをリッスン
+        eventBus.on(GameEventTypes.DAMAGE_DEALT, (data) => {
+            console.log(`📡 EventBus: Damage dealt to ${data.targetId}: ${data.damage}`);
+        });
+
+        // ノックアウトイベントをリッスン
+        eventBus.on(GameEventTypes.POKEMON_KNOCKED_OUT, (data) => {
+            console.log(`📡 EventBus: Pokemon knocked out: ${data.pokemonId}`);
+        });
+
+        console.log('📡 EventBus listeners registered in View');
     }
 
     /**
@@ -340,17 +351,7 @@ export class View {
         }
     }
 
-    // All messages will now go through showGameMessage or showErrorMessage
-
-    _handleHandClickDelegation(e) {
-        const cardElement = e.target.closest('[data-card-id]');
-        if (cardElement && this.cardClickHandler) {
-            // runtimeId を優先的に cardId として渡す（後方互換のためキー名は維持）
-            const ds = { ...cardElement.dataset };
-            ds.cardId = cardElement.dataset.runtimeId || cardElement.dataset.cardId;
-            this.cardClickHandler(ds);
-        }
-    }
+    // ✅ Three.js専用: DOM版hand click delegationは削除（Three.jsが直接処理）
 
     render(state) {
         // 差分レンダリング：変更があった領域のみを更新
@@ -378,6 +379,9 @@ export class View {
         }
 
         this.lastRenderedState = this._cloneStateForCache(state);
+
+        // ターンに応じた視覚的フィードバックを更新
+        this._updateTurnVisualFeedback(state);
 
         // Three.js 3Dビューにも状態を反映
         if (this.use3DView && this.threeViewBridge.isActive()) {
@@ -490,71 +494,32 @@ export class View {
         // Three.js有効時はDOM版をスキップ
         const use3D = this.use3DView && this.threeViewBridge?.isActive();
 
-        // 部分的なクリアとレンダリング（手札）
-        if (!use3D) {
-            if (this.renderRegions.playerHand.dirty) {
-                this._clearHandArea(this.playerHand);
-                this._renderHand(this.playerHand, state.players.player.hand, 'player');
-                this.renderRegions.playerHand.dirty = false;
-            }
-
-            if (this.renderRegions.cpuHand.dirty) {
-                this._clearHandArea(this.cpuHand);
-                this._renderHand(this.cpuHand, state.players.cpu.hand, 'cpu');
-                this.renderRegions.cpuHand.dirty = false;
-            }
-        } else {
-            // Three.js使用時はDOMをクリアしてdirtyフラグをリセット
-            if (this.renderRegions.playerHand.dirty) {
-                this._clearHandArea(this.playerHand);
-                this.renderRegions.playerHand.dirty = false;
-            }
-            if (this.renderRegions.cpuHand.dirty) {
-                this._clearHandArea(this.cpuHand);
-                this.renderRegions.cpuHand.dirty = false;
-            }
+        // ✅ 手札は DOM/CSS版でレンダリング（一般的なTCG方式）
+        if (this.renderRegions.playerHand.dirty) {
+            this._renderHand(this.playerHand, state.players.player.hand, 'player');
+            this.renderRegions.playerHand.dirty = false;
+        }
+        if (this.renderRegions.cpuHand.dirty) {
+            this._renderHand(this.cpuHand, state.players.cpu.hand, 'cpu');
+            this.renderRegions.cpuHand.dirty = false;
         }
 
         // プレイヤーボード（Active, Bench, Prize, Deck）- Three.js有効時もスキップ
-        if (!use3D && (this.renderRegions.playerActive.dirty || this.renderRegions.playerBench.dirty ||
-            this.renderRegions.playerPrize.dirty || this.renderRegions.playerDeck.dirty)) {
-            this._clearBoardArea(this.playerBoard);
-            this._renderBoard(this.playerBoard, state.players.player, 'player');
-            this.renderRegions.playerActive.dirty = false;
-            this.renderRegions.playerBench.dirty = false;
-            this.renderRegions.playerPrize.dirty = false;
-            this.renderRegions.playerDeck.dirty = false;
-        } else if (use3D) {
-            // Three.js使用時はdirtyフラグのみリセット
-            this.renderRegions.playerActive.dirty = false;
-            this.renderRegions.playerBench.dirty = false;
-            this.renderRegions.playerPrize.dirty = false;
-            this.renderRegions.playerDeck.dirty = false;
-        }
+        // ✅ Three.js専用: DOM版board renderingは削除
+        // dirtyフラグのみリセット
+        this.renderRegions.playerActive.dirty = false;
+        this.renderRegions.playerBench.dirty = false;
+        this.renderRegions.playerPrize.dirty = false;
+        this.renderRegions.playerDeck.dirty = false;
+        this.renderRegions.cpuActive.dirty = false;
+        this.renderRegions.cpuBench.dirty = false;
+        this.renderRegions.cpuPrize.dirty = false;
+        this.renderRegions.cpuDeck.dirty = false;
 
-        // CPUボード（Active, Bench, Prize, Deck）- Three.js有効時もスキップ
-        if (!use3D && (this.renderRegions.cpuActive.dirty || this.renderRegions.cpuBench.dirty ||
-            this.renderRegions.cpuPrize.dirty || this.renderRegions.cpuDeck.dirty)) {
-            this._clearBoardArea(this.opponentBoard);
-            this._renderBoard(this.opponentBoard, state.players.cpu, 'cpu');
-            this.renderRegions.cpuActive.dirty = false;
-            this.renderRegions.cpuBench.dirty = false;
-            this.renderRegions.cpuPrize.dirty = false;
-            this.renderRegions.cpuDeck.dirty = false;
-        } else if (use3D) {
-            // Three.js使用時はdirtyフラグのみリセット
-            this.renderRegions.cpuActive.dirty = false;
-            this.renderRegions.cpuBench.dirty = false;
-            this.renderRegions.cpuPrize.dirty = false;
-            this.renderRegions.cpuDeck.dirty = false;
-        }
-
-        // レイアウトはCSSに委譲（手札位置調整のJS制御は撤廃）
+        // ✅ Three.js専用: レイアウトはThree.jsが管理
     }
 
-    _clearHandArea(handElement) {
-        if (handElement) handElement.innerHTML = '';
-    }
+    // ✅ Three.js専用: DOM版hand clearingは不要
 
     _clearBoardArea(boardElement) {
         if (!boardElement) return;
@@ -622,9 +587,7 @@ export class View {
             slot.innerHTML = '';
         });
 
-        // Clear hand areas
-        if (this.playerHand) this.playerHand.innerHTML = '';
-        if (this.cpuHand) this.cpuHand.innerHTML = '';
+        // ✅ Three.js専用: 手札クリアは不要（Three.jsが管理）
     }
 
     _renderBoard(boardElement, playerState, playerType) {
@@ -718,6 +681,15 @@ export class View {
         }
         const arr = Array.isArray(hand) ? hand : [];
 
+        // ✅ 既存の手札カードを完全にクリア（増殖バグ防止）
+        handElement.innerHTML = '';
+
+        // ✅ 内部コンテナを作成（CSSの#player-hand / #cpu-handに対応）
+        const innerContainer = document.createElement('div');
+        innerContainer.id = playerType === 'player' ? 'player-hand' : 'cpu-hand';
+        innerContainer.className = playerType === 'player' ? 'hand-dock' : 'cpu-hand-scaling';
+        handElement.appendChild(innerContainer);
+
         // 既存のアクティブ状態をクリア
         this._clearHandActiveStates();
 
@@ -736,13 +708,13 @@ export class View {
             const cardEl = this._createCardElement(card, playerType, 'hand', index, isFaceDown);
 
             // プレイヤーとCPUで異なる動的カードサイズを設定
-            if (playerType === 'player') {
-                handSlot.classList.add('flex-shrink-0'); // プレイヤーは動的サイズ（CSS変数）
-                cardEl.classList.add('w-full', 'h-full');
-            } else {
-                handSlot.classList.add('flex-shrink-0'); // CPUも動的サイズ（CSS変数）
-                cardEl.classList.add('w-full', 'h-full');
-            }
+            // ✅ 標準的なTCGカードサイズ（Hearthstone/MTG Arena方式）
+            handSlot.classList.add('flex-shrink-0');
+            cardEl.classList.add('w-full', 'h-full');
+
+            // ✅ CSS変数のサイズを確実に適用
+            handSlot.style.width = 'var(--hand-card-width)';
+            handSlot.style.height = 'var(--hand-card-height)';
 
             // 基本的な表示設定のみ（Mac Dock効果は後で追加）
             handSlot.style.visibility = 'visible';
@@ -750,19 +722,45 @@ export class View {
             handSlot.style.position = 'relative';
             handSlot.style.opacity = '1'; // Always visible by default
 
+            // ✅ プレイヤー手札のクリックイベントリスナーを追加
+            if (playerType === 'player' && this.cardClickHandler) {
+                handSlot.style.cursor = 'pointer';
+                handSlot.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const dataset = {
+                        runtimeId: card.runtimeId || card.id,
+                        cardId: card.id,
+                        owner: playerType,
+                        zone: 'hand',
+                        index: index
+                    };
+                    this.cardClickHandler(dataset);
+                });
+            }
+
             handSlot.appendChild(cardEl);
-            handElement.appendChild(handSlot);
+            innerContainer.appendChild(handSlot);
             // Append後にz-indexを設定し確実に前面表示
             ZIndexManager.setHandNormal(handSlot);
         });
 
         // DOM挿入後の強制再描画
-        if (handElement.children.length > 0) {
-            handElement.offsetHeight; // Force reflow
+        if (innerContainer.children.length > 0) {
+            innerContainer.offsetHeight; // Force reflow
 
             if (playerType === 'player') {
-                this._applyHandDockEffect(handElement);
-                this._adjustHandHeight(handElement);
+                this._applyHandDockEffect(innerContainer);
+                this._adjustHandHeight(innerContainer);
+                // ✅ Mac Dockエフェクトの初期化（ホバー効果を有効化）
+                requestAnimationFrame(() => {
+                    this._initHandDock();
+                });
+            } else if (playerType === 'cpu') {
+                // ✅ CPU手札にもhand-cardクラスを追加（ホバー効果用）
+                const handSlots = innerContainer.querySelectorAll('.hand-slot');
+                handSlots.forEach(slot => {
+                    slot.classList.add('hand-card');
+                });
             }
         }
     }
@@ -811,21 +809,19 @@ export class View {
     _adjustHandHeight(handElement) {
         if (!handElement) return;
 
-        // 基本カードサイズ (w-24 h-32 = 96px x 128px)
+        // ✅ 業界標準に合わせた高さ調整
         const baseCardHeight = 128;
-        // Mac Dock効果の最大スケール（適度な拡大 = 1.4倍）
-        const maxScale = 1.4;
-        // 最大リフト量（1.4倍拡大に合わせて調整）
-        const maxLift = 20;
+        const maxScale = 1.2;  // 業界標準：20%拡大
+        const maxLift = 20;    // 業界標準：20px上昇
 
         // 拡大時の最大必要高さを計算
         const maxCardHeight = baseCardHeight * maxScale;
         const requiredHeight = Math.ceil(maxCardHeight + maxLift + 30); // 余白30px
 
-        // コンテナの高さを動的に設定（制限なし）
+        // コンテナの高さを動的に設定
         handElement.style.height = `${requiredHeight}px`;
         handElement.style.minHeight = `${requiredHeight}px`;
-        handElement.style.maxHeight = 'none'; // 高さ制限を解除
+        handElement.style.maxHeight = 'none';
     }
 
     /**
@@ -835,18 +831,22 @@ export class View {
         const container = document.getElementById('player-hand');
         if (!container) return;
 
+        // ✅ 重複初期化を防ぐ
+        if (container._handDockInitialized) return;
+        container._handDockInitialized = true;
+
         // 簡潔な初期化ログ
         const containerStyle = window.getComputedStyle(container);
         // console.log(`🃏 Hand container z-index: ${containerStyle.zIndex}`);  // Debug only
 
-        // 画面サイズに応じて動的に調整（より大きく、ダイナミックに）
+        // ✅ 業界標準（Hearthstone/MTG Arena）に準拠
         const screenWidth = window.innerWidth || 800;
-        const RADIUS = Math.min(220, screenWidth * 0.25);        // 画面幅の25%、最大220px（拡張）
-        const BASE_SCALE = 1.0;    // より大きなベースサイズ
-        const MAX_SCALE = 1.4;                                  // 適度な拡大に統一
-        const MAX_LIFT = Math.min(80, screenWidth * 0.08);      // 画面幅の8%、最大80px（より高い浮上）
-        const BASE_GAP = 2;        // px default spacing per side
-        const MAX_GAP = Math.min(8, screenWidth * 0.01);       // 画面幅の1%、最大8px（より大きなギャップ）
+        const RADIUS = Math.min(180, screenWidth * 0.2);        // 影響範囲を適度に
+        const BASE_SCALE = 1.0;
+        const MAX_SCALE = 1.2;                                  // 業界標準：20%拡大
+        const MAX_LIFT = 20;                                    // 業界標準：20px上昇
+        const BASE_GAP = 2;
+        const MAX_GAP = Math.min(6, screenWidth * 0.008);      // ギャップを控えめに
 
         let rafId = null;
         let pendingX = null;
@@ -1494,7 +1494,7 @@ export class View {
         // メッセージを表示（ボタンは表示しない）
         this.gameMessageDisplay.textContent = message;
         this.gameMessageDisplay.classList.remove('hidden');
-        animationManager.animateMessage(this.gameMessageDisplay);
+        // ✅ Three.js専用: 通知はmodalManagerが処理
 
         // ボタンがある場合は警告を出す（開発者向け）
         if (actions.length > 0) {
@@ -1528,8 +1528,7 @@ export class View {
             this.gameMessageDisplay.textContent = message;
             this.gameMessageDisplay.classList.remove('hidden');
 
-            // メッセージアニメーション
-            animationManager.animateMessage(this.gameMessageDisplay);
+            // ✅ Three.js専用: 通知はmodalManagerが処理
         }
     }
 
@@ -1567,7 +1566,7 @@ export class View {
         if (this.gameMessageDisplay) {
             this.gameMessageDisplay.textContent = message;
             this.gameMessageDisplay.classList.remove('hidden');
-            animationManager.animateError(this.gameMessageDisplay);
+            // ✅ Three.js専用: 通知はmodalManagerが処理
         }
     }
 
@@ -1607,14 +1606,13 @@ export class View {
         if (el) el.classList.add('is-hidden');
     }
 
+    // ✅ Three.js専用: 手札表示制御は不要（Three.jsが常に表示）
     showHand(owner) {
-        const hand = owner === 'player' ? this.playerHand : this.cpuHand;
-        this.showElement(hand);
+        // No-op: Three.js always renders hands
     }
 
     hideHand(owner) {
-        const hand = owner === 'player' ? this.playerHand : this.cpuHand;
-        this.hideElement(hand);
+        // No-op: Three.js always renders hands
     }
 
     // Action Buttons (Floating HUD System - Direct Management)
@@ -1756,6 +1754,14 @@ export class View {
             const cardInSlot = slotElement.querySelector('[data-card-id]');
             const cardId = cardInSlot ? (cardInSlot.dataset.runtimeId || cardInSlot.dataset.cardId) : null;
 
+            console.log('SLOT CLICKED (view.js):', {
+                owner,
+                zone,
+                index,
+                hasCard: !!cardId,
+                cardId
+            });
+
             const dataset = {
                 owner: owner,
                 zone: zone,
@@ -1810,9 +1816,7 @@ export class View {
             slot.innerHTML = '';
         });
 
-        // Clear hand areas
-        if (this.playerHand) this.playerHand.innerHTML = '';
-        if (this.cpuHand) this.cpuHand.innerHTML = '';
+        // ✅ Three.js専用: 手札クリアは不要（Three.jsが管理）
 
         noop('✅ Board cleared');
     }
@@ -1994,6 +1998,44 @@ export class View {
 
         // 初期状態で軽い思考アニメーション開始
         setTimeout(() => startCpuThinking(), 1000);
+    }
+
+    /**
+     * ターンに応じた視覚的フィードバックを更新
+     */
+    _updateTurnVisualFeedback(state) {
+        const isCpuTurn = state.turnPlayer === 'cpu';
+        const isProcessing = state.isProcessing;
+
+        // ✅ Three.js専用: 手札の視覚フィードバックはThree.jsが管理（InteractionHandlerのターンチェック）
+
+        // プレイヤーのフィールドカード
+        const playerFieldSlots = document.querySelectorAll('[data-owner="player"].card-slot');
+        playerFieldSlots.forEach(slot => {
+            if (isCpuTurn || isProcessing) {
+                slot.style.opacity = '0.6';
+                slot.style.cursor = 'not-allowed';
+                slot.style.pointerEvents = 'none';
+            } else {
+                slot.style.opacity = '1';
+                slot.style.cursor = 'pointer';
+                slot.style.pointerEvents = 'auto';
+            }
+        });
+
+        // CPUのカードは常に情報表示のみ
+        const cpuFieldSlots = document.querySelectorAll('[data-owner="cpu"].card-slot');
+        cpuFieldSlots.forEach(slot => {
+            const hasCard = slot.querySelector('[data-card-id]');
+            if (hasCard) {
+                slot.style.cursor = 'help';
+                slot.style.opacity = '1';
+            } else {
+                slot.style.cursor = 'default';
+                slot.style.opacity = '0.5';
+            }
+            slot.style.pointerEvents = 'auto'; // 情報表示は許可
+        });
     }
 
     /**

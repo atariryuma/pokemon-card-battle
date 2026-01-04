@@ -18,6 +18,14 @@ export class BoardEventHandler {
         this.clickHandler = clickHandler;
         this.isEnabled = true;
 
+        // ✅ ホバー状態追跡用
+        this.lastHoveredSlot = null;
+
+        // ✅ メモリリーク修正: バインド済み関数を保存
+        this._boundHandleClick = this._handleClick.bind(this);
+        this._boundHandleMouseOver = this._handleMouseOver.bind(this);
+        this._boundHandleMouseOut = this._handleMouseOut.bind(this);
+
         this._bindEvents();
     }
 
@@ -26,11 +34,11 @@ export class BoardEventHandler {
      */
     _bindEvents() {
         // クリックイベント委譲
-        this.gameBoard.addEventListener('click', this._handleClick.bind(this), true);
+        this.gameBoard.addEventListener('click', this._boundHandleClick, true);
 
         // ホバー効果のためのマウスイベント
-        this.gameBoard.addEventListener('mouseover', this._handleMouseOver.bind(this), true);
-        this.gameBoard.addEventListener('mouseout', this._handleMouseOut.bind(this), true);
+        this.gameBoard.addEventListener('mouseover', this._boundHandleMouseOver, true);
+        this.gameBoard.addEventListener('mouseout', this._boundHandleMouseOut, true);
     }
 
     /**
@@ -68,22 +76,35 @@ export class BoardEventHandler {
     }
 
     /**
-     * マウスオーバーハンドラ
+     * ✅ マウスオーバーハンドラ（改善版）
      */
     _handleMouseOver(event) {
         const slot = this._findCardSlot(event.target);
         if (slot) {
+            // ✅ 前回のホバー要素をクリア
+            if (this.lastHoveredSlot && this.lastHoveredSlot !== slot) {
+                this.lastHoveredSlot.classList.remove('is-hovered');
+            }
+
             slot.classList.add('is-hovered');
+            this.lastHoveredSlot = slot;
         }
     }
 
     /**
-     * マウスアウトハンドラ
+     * ✅ マウスアウトハンドラ（改善版）
      */
     _handleMouseOut(event) {
         const slot = this._findCardSlot(event.target);
         if (slot) {
-            slot.classList.remove('is-hovered');
+            // ✅ 実際に要素から離れたときのみクリア（relatedTargetチェック）
+            const relatedTarget = event.relatedTarget;
+            if (!slot.contains(relatedTarget)) {
+                slot.classList.remove('is-hovered');
+                if (this.lastHoveredSlot === slot) {
+                    this.lastHoveredSlot = null;
+                }
+            }
         }
     }
 
@@ -182,9 +203,22 @@ export class BoardEventHandler {
      * クリーンアップ
      */
     destroy() {
-        this.gameBoard.removeEventListener('click', this._handleClick.bind(this), true);
-        this.gameBoard.removeEventListener('mouseover', this._handleMouseOver.bind(this), true);
-        this.gameBoard.removeEventListener('mouseout', this._handleMouseOut.bind(this), true);
+        // ✅ ホバー状態をクリア
+        if (this.lastHoveredSlot) {
+            this.lastHoveredSlot.classList.remove('is-hovered');
+            this.lastHoveredSlot = null;
+        }
+
+        // ✅ メモリリーク修正: 保存済みの関数参照を使用
+        this.gameBoard.removeEventListener('click', this._boundHandleClick, true);
+        this.gameBoard.removeEventListener('mouseover', this._boundHandleMouseOver, true);
+        this.gameBoard.removeEventListener('mouseout', this._boundHandleMouseOut, true);
+
+        // 参照をクリア
+        this._boundHandleClick = null;
+        this._boundHandleMouseOver = null;
+        this._boundHandleMouseOut = null;
+        this.clickHandler = null;
     }
 }
 

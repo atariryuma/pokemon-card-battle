@@ -2,32 +2,24 @@
    手札エリアレイアウト
    ========================================== */
 
-/* CPU手札 - 独立配置システム */
-.cpu-hand-independent {
+/* CPU手札（標準的なTCG方式：画面上部、コンパクト） */
+#cpu-hand-container {
     position: fixed;
     top: clamp(10px, 2vh, 24px);
     left: 50%;
     transform: translateX(-50%);
-    width: clamp(400px, 60vw, 700px);
-    height: clamp(100px, 15vh, 140px);
+    width: clamp(350px, 50vw, 600px); /* 60vw → 50vw, 700px → 600px (小さく) */
+    height: clamp(80px, 12vh, 110px); /* 15vh → 12vh, 140px → 110px (小さく) */
     z-index: var(--z-cpu-hand-base);
     pointer-events: none;
     overflow: visible;
     background: transparent;
-    padding: 8px 0;
-    transform-style: flat;
-}
-
-.cpu-hand-container {
-    width: 100%;
-    height: 100%;
+    padding: 6px 0; /* 8px → 6px */
     display: flex;
     justify-content: center;
     align-items: flex-end;
-    gap: clamp(4px, 0.8vw, 12px);
-    padding: 0 clamp(16px, 3vw, 40px);
+    gap: clamp(2px, 0.5vw, 8px); /* 4px → 2px, 0.8vw → 0.5vw, 12px → 8px */
     box-sizing: border-box;
-    pointer-events: none;
 }
 
 /* CPU手札のhand-slotクラス */
@@ -35,7 +27,7 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    gap: 4px;
+    gap: 2px; /* 4px → 2px (よりコンパクト) */
     pointer-events: none;
     transform: none;
     transform-style: flat;
@@ -66,8 +58,8 @@
 }
 
 #cpu-hand .hand-slot {
-    width: calc(var(--hand-card-width) * 0.85);
-    height: calc(var(--hand-card-height) * 0.85);
+    width: calc(var(--hand-card-width) * 0.7); /* 0.85 → 0.7 (さらに小さく) */
+    height: calc(var(--hand-card-height) * 0.7); /* 0.85 → 0.7 (さらに小さく) */
     border-radius: var(--radius-md);
     background-color: rgba(25, 25, 35, 0.95);
     border: 2px solid rgba(255, 215, 0, 0.4);
@@ -104,20 +96,33 @@
     box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
 }
 
-/* プレイヤー手札エリア */
+/* プレイヤー手札エリア（標準的なTCG方式：画面下部） */
 #player-hand-container {
-    grid-area: player-hand;
+    position: fixed;
+    bottom: 80px; /* Game Footer上部 */
+    left: 50%;
+    transform: translateX(-50%);
+    width: clamp(600px, 80vw, 1200px);
     height: clamp(220px, 32vh, 320px);
     max-height: 320px;
     display: flex;
     justify-content: center;
     align-items: flex-end;
-    position: relative;
     z-index: var(--z-hand-area);
     margin-bottom: 0;
     overflow: visible;
     pointer-events: none;
 }
+
+/* ✅ ハイブリッド方式: DOM版手札は常に表示（Three.jsと融合）*/
+/* Three.jsモード時もDOM版手札を表示 */
+/* body.three-active #player-hand-container,
+body.three-active #player-hand {
+    pointer-events: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    z-index: -1 !important;
+} */
 
 #player-hand-container #player-hand,
 #player-hand-container .hand-slot {

@@ -31,6 +31,7 @@ export class GameBoard3D {
         // ゲームオブジェクト
         this.slots = new Map();        // zone-owner-index → CardSlot
         this.cards = new Map();        // runtimeId → Card3D
+        this.selectedCard = null;      // 現在選択中のカード
 
         // コールバック
         this.onSlotClick = null;
@@ -84,16 +85,20 @@ export class GameBoard3D {
 
         // アニメーションループ開始
         this.threeScene.start();
-
-        console.log('🎮 GameBoard3D initialized');
     }
+    /**
+     * インタラクションマネージャーを取得（外部からゲーム状態を設定するため）
+     */
+    get interactionManager() {
+        return this.interaction;
+    }
+
 
     /**
      * スロット作成（slots_named配列から）
      */
     _createSlots() {
         if (!this.playmatSlotsData || !this.playmatSlotsData.slots_named) {
-            console.warn('No playmat slot data available, using fallback positions');
             this._createFallbackSlots();
             return;
         }
@@ -117,8 +122,6 @@ export class GameBoard3D {
             this._createSingleSlot(parsed.owner, parsed.zone, parsed.index, coords);
         });
 
-        console.log(`📍 Created ${this.slots.size} slots from playmat data`);
-        console.log('📍 Slot keys:', Array.from(this.slots.keys()));
     }
 
     /**
@@ -317,6 +320,23 @@ export class GameBoard3D {
         }
 
         if (userData.type === 'card' && this.onCardClick) {
+            // ✅ ハイブリッド方式: 手札クリックはDOM版に任せる
+            if (userData.zone === 'hand') {
+                return;
+            }
+
+            // ✅ 選択エフェクトを表示（ボード上のカードのみ）
+            const clickedCard = this.cards.get(userData.runtimeId);
+            if (clickedCard) {
+                // 前の選択をクリア
+                if (this.selectedCard && this.selectedCard !== clickedCard) {
+                    this.selectedCard.setSelected(false);
+                }
+                // 新しいカードを選択
+                clickedCard.setSelected(true);
+                this.selectedCard = clickedCard;
+            }
+
             this.onCardClick({
                 cardId: userData.cardId,
                 runtimeId: userData.runtimeId,
@@ -332,6 +352,11 @@ export class GameBoard3D {
      */
     _handleHover(data) {
         const { object, isHovered, userData } = data;
+
+        // ✅ ハイブリッド方式: 手札のホバーはDOM版に任せる
+        if (userData?.zone === 'hand') {
+            return;
+        }
 
         if (userData?.type === 'slot') {
             const slotKey = `${userData.zone}-${userData.owner}-${userData.index}`;
@@ -355,12 +380,16 @@ export class GameBoard3D {
     _handleDragStart(data) {
         const { userData } = data;
         if (userData?.type === 'card') {
-            // プレイヤーの手札のみドラッグ可能
-            if (userData.owner === 'player' && userData.zone === 'hand') {
-                // ドラッグ可能なスロットをハイライト
-                this.highlightSlotsByZone('active', 'player');
-                this.highlightSlotsByZone('bench', 'player');
+            // ✅ ハイブリッド方式: 手札のドラッグはDOM版に任せる（将来的に実装）
+            if (userData.zone === 'hand') {
+                return;
             }
+            // プレイヤーの手札のみドラッグ可能（現在は無効化）
+            // if (userData.owner === 'player' && userData.zone === 'hand') {
+            //     // ドラッグ可能なスロットをハイライト
+            //     this.highlightSlotsByZone('active', 'player');
+            //     this.highlightSlotsByZone('bench', 'player');
+            // }
         }
     }
 
@@ -519,6 +548,11 @@ export class GameBoard3D {
         // 手札カードは呼び出し側で setRotation() で回転を設定する
         if (options.zone !== 'hand') {
             card.layFlat();
+        }
+
+        // ✅ active/benchゾーンのカードは裏向きで開始（フリップアニメーション用）
+        if (options.zone === 'active' || options.zone === 'bench') {
+            card.showBack();
         }
 
         // 手札カードは呼吸アニメーションを有効化
@@ -782,12 +816,32 @@ export class GameBoard3D {
     }
 
     /**
+     * ベンチ→アクティブ昇格アニメーション
+     */
+    async animateBenchToActive(pokemonId, benchIndex, duration = 500) {
+        const card = this.cards.get(pokemonId);
+        if (card) {
+            await card.animateToActive(duration);
+        }
+    }
+
+    /**
      * 進化アニメーション
      */
     async animateCardEvolution(runtimeId, duration = 800) {
         const card = this.cards.get(runtimeId);
         if (card) {
             await card.animateEvolution(duration);
+        }
+    }
+
+    /**
+     * カードフリップアニメーション
+     */
+    async flipCard(runtimeId, duration = 600) {
+        const card = this.cards.get(runtimeId);
+        if (card) {
+            await card.flip(duration);
         }
     }
 

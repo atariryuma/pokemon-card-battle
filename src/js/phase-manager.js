@@ -5,6 +5,7 @@
  */
 
 import { noop } from './utils.js';
+import * as Logic from './logic.js';
 
 /**
  * ゲームフェーズの定義
@@ -117,7 +118,7 @@ export class PhaseManager {
   canEnterPlayerMainPhase(state) {
     return (
       this.currentPhase === GAME_PHASES.PLAYER_DRAW &&
-      state.hasDrawnThisTurn === true
+      state.turnState?.hasDrawn === true
     );
   }
 
@@ -132,33 +133,10 @@ export class PhaseManager {
     
     // 使用可能な攻撃があるかチェック（ここではLogic.hasEnoughEnergyを使用する想定）
     return activePokemon.attacks.some(attack => 
-      this.hasEnoughEnergyForAttack(activePokemon, attack)
+      Logic.hasEnoughEnergy(activePokemon, attack)
     );
   }
 
-  /**
-   * エネルギーチェック（Logic.jsの関数を使用）
-   * @deprecated Logic.hasEnoughEnergyを直接使用してください
-   */
-  hasEnoughEnergyForAttack(pokemon, attack) {
-    // Logic.jsをimportして使用する必要がある
-    // ここでは一時的に簡易チェックを提供
-    console.warn('PhaseManager.hasEnoughEnergyForAttack is deprecated. Use Logic.hasEnoughEnergy instead.');
-
-    const attached = (pokemon.attached_energy || []).map(e => e.energy_type);
-    const cost = [...attack.cost];
-
-    for (let i = attached.length - 1; i >= 0; i--) {
-      const energyType = attached[i];
-      const costIndex = cost.findIndex(c => c === energyType || c === 'Colorless');
-      if (costIndex !== -1) {
-        cost.splice(costIndex, 1);
-        attached.splice(i, 1);
-      }
-    }
-
-    return cost.length === 0 || (cost.every(c => c === 'Colorless') && attached.length >= cost.length);
-  }
 
   /**
    * ターン終了可能チェック
@@ -273,7 +251,7 @@ export class PhaseManager {
         break;
       
       case GAME_PHASES.PLAYER_DRAW:
-        if (!state.hasDrawnThisTurn) {
+        if (!state.turnState?.hasDrawn) {
           actions.push('draw-card');
         } else {
           // ドロー完了後は自動的にメインフェーズに移行

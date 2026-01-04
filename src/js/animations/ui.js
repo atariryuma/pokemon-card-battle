@@ -189,16 +189,34 @@ export class UIAnimations extends AnimationCore {
      * ハイライト表示/非表示
      * @param {Element} element - 対象要素
      * @param {boolean} show - 表示/非表示
+     * @param {Object} options - オプション { type: 'highlight'|'select' }
      */
-    async highlight(element, show = true) {
+    async highlight(element, show = true, options = {}) {
         if (!element) return;
 
+        const type = options.type || 'highlight';
+        const className = type === 'select' ? 'selected' : 'highlighted';
+
         if (show) {
-            element.classList.add('highlighted');
-            await this.animate(element, 'anim-highlight-show', ANIMATION_TIMING.fast);
+            // ✅ 選択時は他の状態をクリア
+            if (type === 'select') {
+                element.classList.remove('highlighted', 'is-hovered');
+                element.classList.add('selected');
+                // ✅ スムーズなスケールアニメーション
+                await this.animate(element, 'anim-select-show', ANIMATION_TIMING.fast);
+            } else {
+                element.classList.add('highlighted');
+                await this.animate(element, 'anim-highlight-show', ANIMATION_TIMING.fast);
+            }
         } else {
-            await this.animate(element, 'anim-highlight-hide', ANIMATION_TIMING.fast);
-            element.classList.remove('highlighted');
+            // ✅ 解除時のアニメーション
+            if (type === 'select') {
+                await this.animate(element, 'anim-select-hide', ANIMATION_TIMING.fast);
+                element.classList.remove('selected');
+            } else {
+                await this.animate(element, 'anim-highlight-hide', ANIMATION_TIMING.fast);
+                element.classList.remove('highlighted');
+            }
         }
     }
 

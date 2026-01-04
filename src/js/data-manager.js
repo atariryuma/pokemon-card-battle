@@ -97,7 +97,6 @@ export function enableAutoRefresh() {
 export function getCardImagePath(cardNameEn, card = null) {
     // 引数の妥当性チェック
     if (!card && (!cardNameEn || typeof cardNameEn !== 'string')) {
-        console.warn('⚠️ getCardImagePath: invalid inputs:', { cardNameEn, card });
         return 'assets/ui/card_back.webp'; // フォールバック画像
     }
     

@@ -146,7 +146,7 @@ export class CardMoveAnimations extends AnimationCore {
      * 手札配布アニメーション（高度版）
      */
     async dealHand(cards, playerId, options = {}) {
-        const { staggerDelay = 80 } = options;
+        const { staggerDelay = 80, withFlip = false } = options;
 
         if (!Array.isArray(cards)) {
             console.warn('dealHand: cards should be an array');
@@ -166,15 +166,22 @@ export class CardMoveAnimations extends AnimationCore {
                 setTimeout(async () => {
                     const cardElement = handElement.children[index];
                     if (cardElement) {
-                        // カードを最初は非表示にして
-                        cardElement.style.opacity = '0';
-                        cardElement.style.transform = 'translateY(-30px) scale(0.8)';
+                        // ✅ フリップアニメーション追加（Hearthstone/MTG Arena風）
+                        if (withFlip) {
+                            cardElement.style.transform = 'rotateY(90deg) translateY(-30px) scale(0.8)';
+                            cardElement.style.opacity = '0';
+                        } else {
+                            cardElement.style.opacity = '0';
+                            cardElement.style.transform = 'translateY(-30px) scale(0.8)';
+                        }
 
                         // フェードインアニメーション
                         await this.delay(50);
-                        cardElement.style.transition = 'opacity 300ms ease, transform 300ms ease';
+                        cardElement.style.transition = withFlip
+                            ? 'opacity 300ms ease, transform 500ms ease'
+                            : 'opacity 300ms ease, transform 300ms ease';
                         cardElement.style.opacity = '1';
-                        cardElement.style.transform = 'translateY(0) scale(1)';
+                        cardElement.style.transform = 'translateY(0) scale(1) rotateY(0deg)';
 
                         // 配布効果音の代わりに軽い振動
                         if (navigator.vibrate) {
@@ -231,6 +238,7 @@ export class CardMoveAnimations extends AnimationCore {
 
     /**
      * 高度なカードドローアニメーション（山札から手札へ）
+     * ✅ ハイブリッドモード対応: デッキがDOM に存在しない場合はシンプルなフェードイン
      */
     async drawCardFromDeck(playerId, cardElement, options = {}) {
         const { duration = 600 } = options;
@@ -238,8 +246,17 @@ export class CardMoveAnimations extends AnimationCore {
         const deckElement = findZoneElement(playerId, 'deck');
         const handElement = findZoneElement(playerId, 'hand');
 
+        // ✅ ハイブリッドモード: デッキが3D版のみの場合、シンプルなフェードインに切り替え
         if (!deckElement || !handElement || !cardElement) {
-            console.warn('Missing elements for card draw animation');
+            // デッキがThree.jsで管理されている場合、カードは既に手札にあるのでフェードインのみ
+            if (cardElement) {
+                cardElement.style.opacity = '0';
+                cardElement.style.transform = 'translateY(-30px) scale(0.8)';
+                await this.delay(50);
+                cardElement.style.transition = 'opacity 300ms ease, transform 300ms ease';
+                cardElement.style.opacity = '1';
+                cardElement.style.transform = 'translateY(0) scale(1)';
+            }
             return;
         }
 

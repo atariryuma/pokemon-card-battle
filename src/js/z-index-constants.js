@@ -190,13 +190,3 @@ export class ZIndexManager {
     // CSS 3D Transform は使用せず、3D表示はThree.jsが担当
 }
 
-/**
- * レガシーサポート（既存コードとの互換性）
- */
-export const LEGACY_Z_INDEX = {
-    CARD: Z_INDEX.CARD.toString(),
-    HAND: Z_INDEX.HAND.toString(),
-    HAND_HOVER: Z_INDEX.HAND_HOVER.toString(),
-    CARD_EFFECTS: Z_INDEX.CARD_EFFECTS.toString(),
-    MODAL_TEMP: Z_INDEX.MODALS.toString()
-};

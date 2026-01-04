@@ -16,6 +16,7 @@
 @import url('./components/_card.css');
 @import url('./components/_buttons.css');
 @import url('./components/_modal.css');
+@import url('./components/_input-controls.css');
 
 /* 4. アニメーション */
 @import url('./animations/_keyframes.css');

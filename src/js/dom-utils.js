@@ -57,8 +57,12 @@ export function findZoneElement(playerId, zone) {
             return element;
         }
     }
-    
-    console.warn(`Zone element not found: ${zone} for ${normalizedId}, tried: ${selectorList}`);
+
+    // ✅ ハイブリッドモード: deck/active/bench/discard/prizeはThree.jsで管理されているため警告不要
+    const threeJsZones = ['deck', 'active', 'bench', 'discard', 'prize'];
+    if (!threeJsZones.includes(zone)) {
+        console.warn(`Zone element not found: ${zone} for ${normalizedId}, tried: ${selectorList}`);
+    }
     return null;
 }
 

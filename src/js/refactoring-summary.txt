@@ -1,0 +1,68 @@
+========================================
+Animation API Refactoring Summary
+Date: 2026-01-03
+========================================
+
+## Overview
+Removed legacy animation APIs (animationManager and unifiedAnimationManager) 
+and migrated all code to use the unified 'animate' API.
+
+## Files Modified
+
+### 1. animation-manager.js
+   - Removed: animationManager export (lines 389-434)
+   - Removed: unifiedAnimationManager export (lines 437-756)
+   - Result: 756 lines → 388 lines (removed 368 lines)
+   - Retained: export const animate (new unified API)
+
+### 2. game.js
+   - Updated import: removed animationManager from imports
+   - Replaced: animationManager.flipCardFaceUp() → animate.card.flip()
+   - Replaced: animationManager.createUnifiedCardAnimation() → animate.card.move()
+   - Replaced: animationManager.highlightCard() → animate.ui.highlight(element, true)
+   - Replaced: animationManager.unhighlightCard() → animate.ui.highlight(element, false)
+
+### 3. view.js
+   - Updated import: animationManager → animate
+   - Replaced: animationManager.animateMessage() → animate.ui.notification(..., 'info')
+   - Replaced: animationManager.animateError() → animate.ui.notification(..., 'error')
+
+### 4. turn-manager.js
+   - Updated import: removed animationManager from imports
+   - Replaced: animationManager.animateDrawCard() → animate.cardDraw()
+   - Replaced: animationManager.createUnifiedAttackAnimation() → animate.attackSequence()
+
+### 5. setup-manager.js
+   - Replaced: animationManager.animateHandEntry() → animateFlow.handEntry()
+   - Note: This file uses animateFlow from animations/flow.js
+
+## API Migration Map
+
+Old API (animationManager) → New API (animate)
+------------------------------------------------
+flipCardFaceUp(el, url)           → card.flip(el, { imageUrl: url })
+createUnifiedCardAnimation(...)   → card.move(...)
+highlightCard(el)                 → ui.highlight(el, true)
+unhighlightCard(el)               → ui.highlight(el, false)
+animateMessage(el)                → ui.notification(el?.textContent, 'info')
+animateError(el)                  → ui.notification(el?.textContent, 'error')
+animateDrawCard(el)               → cardDraw('player', el)
+createUnifiedAttackAnimation(...) → attackSequence('normal', 50, ...)
+animateHandEntry(cards)           → animateFlow.handEntry(cards) [flow.js]
+
+## Verification
+All files passed syntax validation with Node.js --check
+
+## Backup Files Created
+- animation-manager.js.bak
+- game.js.bak
+- view.js.bak
+- turn-manager.js.bak
+- setup-manager.js.bak
+
+## Benefits
+1. Simplified codebase (368 lines removed)
+2. Single unified API (animate) for all animations
+3. Better code maintainability
+4. Clearer API structure (animate.card.*, animate.ui.*, etc.)
+5. No legacy compatibility layer

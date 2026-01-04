@@ -23,10 +23,10 @@ async function initializeApp() {
     initializationState.started = true;
     
     try {
-        // DOM要素の存在確認
-        const root = document.getElementById('game-board');
+        // ✅ Three.js専用: game-stageをルート要素として使用
+        const root = document.getElementById('game-stage');
         if (!root) {
-            throw new Error('ゲームボードのルート要素が見つかりません。');
+            throw new Error('ゲームステージ要素が見つかりません。');
         }
 
         // ゲームインスタンスの作成

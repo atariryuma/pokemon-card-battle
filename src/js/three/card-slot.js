@@ -99,8 +99,19 @@ export class CardSlot {
      */
     setHovered(isHovered) {
         if (this.mesh) {
+            // ✅ ハイライト中はホバー効果をスキップ
+            if (this.isHighlighted) {
+                return;
+            }
+
+            // ✅ normalMaterialの不透明度のみ変更
             const opacity = isHovered ? 0.3 : 0.1;
             this.normalMaterial.opacity = opacity;
+
+            // ✅ 現在のマテリアルがnormalMaterialの場合のみ更新
+            if (this.mesh.material === this.normalMaterial) {
+                this.mesh.material.needsUpdate = true;
+            }
         }
     }
 

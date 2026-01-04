@@ -1,0 +1,152 @@
+================================================================================
+                        CLICK EVENT LOG FLOW DIAGRAM
+================================================================================
+
+USER ACTION: Click on a card in the browser
+    |
+    v
++-------------------------------------------------------------------------+
+| FILE: src/js/view/board-event-handler.js                                |
+| FUNCTION: _handleClick (line ~39)                                       |
++-------------------------------------------------------------------------+
+| LOG 1: "BoardEventHandler: click received" + event.target              |
+|        [Shows which HTML element was clicked]                           |
+|                                                                          |
+| LOG 2: "BoardEventHandler: found slot?" + slot                         |
+|        [Shows if a valid card-slot was found]                           |
+|                                                                          |
+| LOG 3: "BoardEventHandler: clickInfo" + clickInfo                      |
+|        [Shows extracted click data: owner, zone, index, cardId]         |
++-------------------------------------------------------------------------+
+    |
+    | Calls this.clickHandler(clickInfo, slot, event)
+    v
++-------------------------------------------------------------------------+
+| FILE: src/js/view.js                                                    |
+| FUNCTION: _makeSlotClickable -> click event listener (line ~1755)      |
++-------------------------------------------------------------------------+
+| LOG 4: "SLOT CLICKED (view.js):" + {owner, zone, index, hasCard, ...} |
+|        [Shows slot was clicked with card presence information]          |
++-------------------------------------------------------------------------+
+    |
+    | Calls this.cardClickHandler(dataset)
+    v
++-------------------------------------------------------------------------+
+| FILE: src/js/game.js                                                    |
+| FUNCTION: _handleCardClick (line ~997)                                 |
++-------------------------------------------------------------------------+
+| LOG 5: "Card Click:" + {owner, zone, cardId, index, currentPhase,     |
+|                          turnPlayer, isProcessing}                      |
+|        [Shows complete game state at time of click]                     |
+|                                                                          |
+| +--- VALIDATION CHECKPOINT 1: isProcessing ---+                       |
+| | if (this.state.isProcessing)                 |                       |
+| | LOG 6a: "BLOCKED: isProcessing = true"       |                       |
+| | RESULT: Click ignored                        |                       |
+| +----------------------------------------------+                       |
+|                                                                          |
+| +--- VALIDATION CHECKPOINT 2: Player Turn, CPU Card ---+              |
+| | if (turnPlayer === 'player' && owner === 'cpu')       |              |
+| | LOG 6b: "BLOCKED: Player turn, CPU card clicked"      |              |
+| |                                                        |              |
+| |   +--- SUB-CHECK: Info Display Allowed ---+         |              |
+| |   | if (zone === 'active' || zone === 'bench')       |              |
+| |   | LOG 6c: "INFO: Info display allowed for..."      |              |
+| |   +----------------------------------------------+         |              |
+| | RESULT: Click ignored (info display only)             |              |
+| +----------------------------------------------------+              |
+|                                                                          |
+| +--- VALIDATION CHECKPOINT 3: CPU Turn, Player Card ---+              |
+| | if (turnPlayer === 'cpu' && owner === 'player')       |              |
+| | LOG 6d: "BLOCKED: CPU turn, Player card clicked"      |              |
+| | RESULT: Click ignored                                 |              |
+| +----------------------------------------------------+              |
+|                                                                          |
+| ALL VALIDATIONS PASSED                                               |
+| LOG 7: "ALLOWED: Click allowed, processing..."                         |
++-------------------------------------------------------------------------+
+    |
+    | Proceeds to switch (this.state.phase)
+    v
++-------------------------------------------------------------------------+
+| Phase-Specific Handlers                                                 |
+| - SETUP -> _handleSetupCardClick                                        |
+| - PLAYER_DRAW -> _handlePlayerDraw                                      |
+| - PLAYER_MAIN -> _handlePlayerMainClick                                 |
+| - AWAITING_NEW_ACTIVE -> _handleNewActiveSelection                      |
+| - PRIZE_SELECTION -> _handlePrizeSelection                              |
++-------------------------------------------------------------------------+
+
+================================================================================
+                      3D DRAG EVENT LOG FLOW DIAGRAM
+================================================================================
+
+USER ACTION: Mouse down on 3D card object
+    |
+    v
++-------------------------------------------------------------------------+
+| FILE: src/js/three/interaction.js                                       |
+| FUNCTION: _handleMouseDown (line ~159)                                 |
++-------------------------------------------------------------------------+
+| LOG 1: "THREE.JS MOUSE DOWN:" + {objectType, owner, isDraggable,      |
+|                                   currentPlayer}                        |
+|        [Shows 3D object interaction details]                            |
+|                                                                          |
+| +--- VALIDATION: Turn Check -----------------------+                  |
+| | if (gameState.turnPlayer !== 'player')            |                  |
+| | LOG 2: "DRAG BLOCKED: Wrong turn" + {owner, ...}  |                  |
+| | RESULT: Drag prevented                            |                  |
+| +---------------------------------------------------+                  |
+|                                                                          |
+| +--- VALIDATION: Owner Check ----------------------+                  |
+| | if (object.userData.owner === 'cpu')              |                  |
+| | RESULT: Drag prevented (no log)                   |                  |
+| +---------------------------------------------------+                  |
+|                                                                          |
+| VALIDATIONS PASSED -> Start drag operation                           |
++-------------------------------------------------------------------------+
+
+================================================================================
+                              LOG PREFIX GUIDE
+================================================================================
+
+PREFIX                  | MEANING                      | FILE LOCATION
+------------------------+------------------------------+-------------------
+BoardEventHandler:      | Low-level click handling     | board-event-handler.js
+SLOT CLICKED:           | DOM slot interaction         | view.js
+Card Click:             | Initial click data           | game.js
+BLOCKED:                | Action prevented             | game.js / interaction.js
+INFO:                   | Additional context           | game.js
+ALLOWED:                | Action permitted             | game.js
+THREE.JS MOUSE DOWN:    | 3D object interaction        | interaction.js
+DRAG BLOCKED:           | 3D drag prevented            | interaction.js
+
+================================================================================
+                          EXAMPLE LOG SEQUENCE
+================================================================================
+
+--- SUCCESSFUL CLICK (Player's Card, Player's Turn) ---
+
+BoardEventHandler: click received <div class="card-slot">
+BoardEventHandler: found slot? <div class="card-slot player-hand">
+BoardEventHandler: clickInfo {owner: "player", zone: "hand", index: "2"}
+SLOT CLICKED (view.js): {owner: "player", zone: "hand", index: "2", hasCard: true}
+Card Click: {owner: "player", zone: "hand", index: "2", currentPhase: "PLAYER_MAIN", turnPlayer: "player", isProcessing: false}
+ALLOWED: Click allowed, processing...
+
+--- BLOCKED CLICK (CPU's Card, Player's Turn) ---
+
+BoardEventHandler: click received <div class="card-slot">
+BoardEventHandler: found slot? <div class="card-slot cpu-active">
+BoardEventHandler: clickInfo {owner: "cpu", zone: "active", index: "0"}
+SLOT CLICKED (view.js): {owner: "cpu", zone: "active", index: "0", hasCard: true}
+Card Click: {owner: "cpu", zone: "active", index: "0", currentPhase: "PLAYER_MAIN", turnPlayer: "player", isProcessing: false}
+BLOCKED: Player turn, CPU card clicked {zone: "active"}
+INFO: Info display allowed for CPU active/bench
+
+--- BLOCKED DRAG (Wrong Turn) ---
+
+THREE.JS MOUSE DOWN: {objectType: "card", owner: "player", isDraggable: true, currentPlayer: "cpu"}
+DRAG BLOCKED: Wrong turn {owner: "player", currentPlayer: "cpu"}
+
+================================================================================
