@@ -183,6 +183,16 @@ export class CardMoveAnimations extends AnimationCore {
                         cardElement.style.opacity = '1';
                         cardElement.style.transform = 'translateY(0) scale(1) rotateY(0deg)';
 
+                        // ✅ アニメーション完了を待つ
+                        await this.delay(withFlip ? 500 : 300);
+
+                        // ✅ 確実にクリーンアップ
+                        cardElement.style.opacity = '1';
+                        cardElement.style.visibility = 'visible';
+                        cardElement.style.display = 'flex';
+                        cardElement.style.transform = 'none';
+                        cardElement.classList.remove('is-preparing-animation');
+
                         // 配布効果音の代わりに軽い振動
                         if (navigator.vibrate) {
                             navigator.vibrate(50);

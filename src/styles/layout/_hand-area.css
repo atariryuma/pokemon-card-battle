@@ -11,7 +11,7 @@
     width: clamp(350px, 50vw, 600px); /* 60vw → 50vw, 700px → 600px (小さく) */
     height: clamp(80px, 12vh, 110px); /* 15vh → 12vh, 140px → 110px (小さく) */
     z-index: var(--z-cpu-hand-base);
-    pointer-events: none;
+    /* ✅ pointer-events削除: 子要素で個別制御 */
     overflow: visible;
     background: transparent;
     padding: 6px 0; /* 8px → 6px */
@@ -28,7 +28,7 @@
     align-items: flex-end;
     justify-content: center;
     gap: 2px; /* 4px → 2px (よりコンパクト) */
-    pointer-events: none;
+    /* ✅ 背景のみpointer-events無効、カードは有効 */
     transform: none;
     transform-style: flat;
     transform-origin: center bottom;
@@ -64,7 +64,8 @@
     background-color: rgba(25, 25, 35, 0.95);
     border: 2px solid rgba(255, 215, 0, 0.4);
     z-index: var(--z-cpu-hand-base);
-    pointer-events: auto;
+    pointer-events: auto !important; /* ✅ 確実にクリック可能 */
+    cursor: pointer;
     position: relative;
     flex-shrink: 0;
     display: flex;
@@ -111,7 +112,7 @@
     z-index: var(--z-hand-area);
     margin-bottom: 0;
     overflow: visible;
-    pointer-events: none;
+    /* ✅ pointer-events削除: 子要素で個別制御 */
 }
 
 /* ✅ ハイブリッド方式: DOM版手札は常に表示（Three.jsと融合）*/
@@ -149,8 +150,8 @@ body.three-active #player-hand {
 }
 
 #player-hand .hand-slot {
-    pointer-events: auto;
-    cursor: pointer;
+    pointer-events: auto !important; /* ✅ 確実にクリック可能 */
+    cursor: pointer !important;
     transform-style: flat !important;
     backface-visibility: visible;
     will-change: auto;
@@ -158,6 +159,8 @@ body.three-active #player-hand {
     height: var(--hand-card-height);
     margin: 0;
     transition: all 0.2s ease;
+    opacity: 1; /* ✅ 確実に表示 */
+    visibility: visible; /* ✅ 確実に表示 */
 }
 
 #player-hand .hand-slot.active {
