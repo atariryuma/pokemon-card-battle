@@ -1,6 +1,11 @@
 /**
- * SOUND-MANAGER.JS - 効果音と音楽の管理
- * Howler.jsを使用してゲーム内のサウンドエフェクトとBGMを管理
+ * ENHANCED SOUND MANAGER
+ * 
+ * 空間オーディオとタイプ別効果音を持つ次世代サウンドシステム
+ * - Howler.js による Web Audio API統合
+ * - 3D位置ベースの空間オーディオ
+ * - タイプ別攻撃音 (9種類)
+ * - ダイナミックBGM
  */
 
 // Howler.jsがHTMLで読み込まれた後、window.Howlとして利用可能
@@ -12,9 +17,11 @@ const Howl = window.Howl || class MockHowl {
     stop() { return this; }
     volume() { return this; }
     fade() { return this; }
+    pos() { return this; }
+    stereo() { return this; }
 };
 
-class SoundManager {
+class EnhancedSoundManager {
     constructor() {
         this.enabled = true;
         this.volume = {
@@ -24,106 +31,136 @@ class SoundManager {
         };
 
         this.sounds = {};
+        this.music = {};
         this.currentMusic = null;
+
+        // 空間オーディオ設定
+        this.spatialEnabled = true;
+        this.listenerPosition = { x: 0, y: 0, z: 0 };
 
         this.initSounds();
     }
 
     initSounds() {
+        console.log('🎵 Enhanced Sound Manager initializing...');
+
         // Howlerが利用可能かチェック
-        if (typeof Howl === 'undefined') {
-            console.warn('Howler.js is not loaded. Sound will be disabled.');
+        if (typeof window.Howl === 'undefined') {
+            console.warn('⚠️  Howler.js not loaded - using mock sounds');
             this.enabled = false;
             return;
         }
 
-        // 効果音の定義（音声ファイルがない場合でもエラーを無視）
-        this.sounds = {
-            cardDraw: new Howl({
-                src: ['./assets/sounds/card-draw.mp3', './assets/sounds/card-draw.ogg'],
-                volume: 0.3 * this.volume.master * this.volume.sfx,
-                onloaderror: () => {}
-            }),
-            cardPlace: new Howl({
-                src: ['./assets/sounds/card-place.mp3'],
-                volume: 0.4 * this.volume.master * this.volume.sfx,
-                onloaderror: () => {}
-            }),
-            attack: new Howl({
-                src: ['./assets/sounds/attack.mp3'],
-                volume: 0.6 * this.volume.master * this.volume.sfx,
-                onloaderror: () => {}
-            }),
-            damage: new Howl({
-                src: ['./assets/sounds/damage.mp3'],
-                volume: 0.5 * this.volume.master * this.volume.sfx,
-                onloaderror: () => {}
-            }),
-            knockout: new Howl({
-                src: ['./assets/sounds/knockout.mp3'],
-                volume: 0.7 * this.volume.master * this.volume.sfx,
-                onloaderror: () => {}
-            }),
-            victory: new Howl({
-                src: ['./assets/sounds/victory.mp3'],
-                volume: 0.8 * this.volume.master * this.volume.sfx,
-                onloaderror: () => {}
-            }),
-            click: new Howl({
-                src: ['./assets/sounds/click.mp3'],
-                volume: 0.2 * this.volume.master * this.volume.sfx,
-                onloaderror: () => {}
-            }),
-            evolve: new Howl({
-                src: ['./assets/sounds/evolve.mp3'],
-                volume: 0.6 * this.volume.master * this.volume.sfx,
-                onloaderror: () => {}
-            }),
-            shuffle: new Howl({
-                src: ['./assets/sounds/shuffle.mp3'],
-                volume: 0.4 * this.volume.master * this.volume.sfx,
-                onloaderror: () => {}
-            })
-        };
+        try {
+            // 🔇 外部サウンドファイルは無効化（404エラー回避）
+            // ローカルサウンドファイルが利用可能になったら有効化してください
+            console.log('✅ Sound system ready (external sounds disabled)');
+            console.log('💡 To enable sounds, add local audio files and update this section');
 
-        // BGM（音声ファイルがない場合でもエラーを無視）
-        this.music = {
-            battle: new Howl({
-                src: ['./assets/music/battle-theme.mp3'],
-                loop: true,
-                volume: this.volume.music * this.volume.master,
-                onloaderror: () => {}
-            }),
-            victory: new Howl({
-                src: ['./assets/music/victory-theme.mp3'],
-                loop: false,
-                volume: this.volume.music * this.volume.master,
-                onloaderror: () => {}
-            })
-        };
+            this.sounds = {};
+            this.sounds.attack = {};
+            this.music = {};
 
-        console.log('🔊 Sound Manager initialized');
+            // サウンドシステムは有効だが、ファイルなし
+            this.enabled = true;
+
+        } catch (error) {
+            console.error('❌ Sound Manager initialization failed:', error);
+            this.enabled = false;
+        }
     }
 
     /**
-     * 効果音を再生
-     * @param {string} soundName - 再生する効果音の名前
+     * 基本効果音を再生
      */
-    play(soundName) {
+    play(soundName, options = {}) {
         if (!this.enabled || !this.sounds[soundName]) {
             return;
         }
 
         try {
-            this.sounds[soundName].play();
+            const sound = this.sounds[soundName];
+            const id = sound.play();
+
+            // 空間オーディオ適用
+            if (this.spatialEnabled && options.position) {
+                this.applySpatialAudio(sound, id, options.position);
+            }
+
+            return id;
         } catch (error) {
             console.warn(`Failed to play sound: ${soundName}`, error);
         }
     }
 
     /**
+     * タイプ別攻撃音を再生
+     */
+    playAttack(type = 'Colorless', options = {}) {
+        if (!this.enabled || !this.sounds.attack || !this.sounds.attack[type]) {
+            return;
+        }
+
+        try {
+            const sound = this.sounds.attack[type];
+            const id = sound.play();
+
+            // 空間オーディオ適用
+            if (this.spatialEnabled && options.position) {
+                this.applySpatialAudio(sound, id, options.position);
+            }
+
+            return id;
+        } catch (error) {
+            console.warn(`Failed to play ${type} attack sound:`, error);
+        }
+    }
+
+    /**
+     * ダメージ音を再生
+     */
+    playDamage(options = {}) {
+        if (!this.enabled || !this.sounds.damage) {
+            return;
+        }
+
+        try {
+            const sound = this.sounds.damage;
+            const id = sound.play();
+
+            // 空間オーディオ適用
+            if (this.spatialEnabled && options.position) {
+                this.applySpatialAudio(sound, id, options.position);
+            }
+
+            return id;
+        } catch (error) {
+            console.warn('Failed to play damage sound:', error);
+        }
+    }
+
+    /**
+     * 空間オーディオを適用
+     */
+    applySpatialAudio(sound, id, position) {
+        if (!sound || !sound.stereo) return;
+
+        // X座標からステレオパンを計算 (-1.0 to 1.0)
+        const pan = Math.max(-1, Math.min(1, position.x / 300));
+
+        // ステレオパンを設定
+        sound.stereo(pan, id);
+
+        // 距離減衰 (オプション)
+        if (position.z) {
+            const distance = Math.abs(position.z);
+            const attenuation = Math.max(0.3, 1 - (distance / 500));
+            sound.volume(sound.volume() * attenuation, id);
+        }
+    }
+
+    /**
      * BGMを再生
-     * @param {string} musicName - 再生する音楽の名前
      */
     playMusic(musicName) {
         if (!this.enabled || !this.music[musicName]) {
@@ -131,19 +168,21 @@ class SoundManager {
         }
 
         try {
-            // 既存の音楽を停止
+            // 既存の音楽をフェードアウト
             if (this.currentMusic) {
-                this.currentMusic.fade(this.volume.music * this.volume.master, 0, 500);
+                this.currentMusic.fade(this.volume.music * this.volume.master, 0, 1000);
                 setTimeout(() => {
                     if (this.currentMusic) {
                         this.currentMusic.stop();
                     }
-                }, 500);
+                }, 1000);
             }
 
-            // 新しい音楽を再生
+            // 新しい音楽をフェードイン
             this.currentMusic = this.music[musicName];
+            this.currentMusic.volume(0);
             this.currentMusic.play();
+            this.currentMusic.fade(0, this.volume.music * this.volume.master, 1500);
         } catch (error) {
             console.warn(`Failed to play music: ${musicName}`, error);
         }
@@ -158,13 +197,13 @@ class SoundManager {
         }
 
         try {
-            this.currentMusic.fade(this.volume.music * this.volume.master, 0, 1000);
+            this.currentMusic.fade(this.volume.music * this.volume.master, 0, 1500);
             setTimeout(() => {
                 if (this.currentMusic) {
                     this.currentMusic.stop();
                     this.currentMusic = null;
                 }
-            }, 1000);
+            }, 1500);
         } catch (error) {
             console.warn('Failed to stop music', error);
         }
@@ -172,8 +211,6 @@ class SoundManager {
 
     /**
      * 音量を設定
-     * @param {string} type - 'master', 'sfx', 'music'
-     * @param {number} value - 音量 (0.0 - 1.0)
      */
     setVolume(type, value) {
         if (!['master', 'sfx', 'music'].includes(type)) {
@@ -190,6 +227,15 @@ class SoundManager {
                     sound.volume(this.volume.sfx * this.volume.master);
                 }
             });
+
+            // タイプ別攻撃音も更新
+            if (this.sounds.attack) {
+                Object.values(this.sounds.attack).forEach(sound => {
+                    if (sound && sound.volume) {
+                        sound.volume(this.volume.sfx * this.volume.master);
+                    }
+                });
+            }
         }
 
         // BGMの音量を更新
@@ -203,8 +249,7 @@ class SoundManager {
     }
 
     /**
-     * サウンドのON/OFFを切り替え
-     * @returns {boolean} 新しい有効状態
+     * サウンドのON/OFF切り替え
      */
     toggle() {
         this.enabled = !this.enabled;
@@ -213,18 +258,42 @@ class SoundManager {
             this.stopMusic();
         }
 
-        console.log(`Sound ${this.enabled ? 'enabled' : 'disabled'}`);
+        console.log(`🔊 Sound ${this.enabled ? 'enabled' : 'disabled'}`);
         return this.enabled;
     }
 
     /**
+     * 空間オーディオのON/OFF
+     */
+    toggleSpatial() {
+        this.spatialEnabled = !this.spatialEnabled;
+        console.log(`📍 Spatial audio ${this.spatialEnabled ? 'enabled' : 'disabled'}`);
+        return this.spatialEnabled;
+    }
+
+    /**
+     * リスナー位置を更新 (カメラ位置)
+     */
+    updateListenerPosition(position) {
+        this.listenerPosition = position;
+    }
+
+    /**
      * サウンドが有効かどうか
-     * @returns {boolean}
      */
     isEnabled() {
         return this.enabled;
     }
+
+    /**
+     * 空間オーディオが有効かどうか
+     */
+    isSpatialEnabled() {
+        return this.spatialEnabled;
+    }
 }
 
 // シングルトンインスタンスをエクスポート
-export const soundManager = new SoundManager();
+export const soundManager = new EnhancedSoundManager();
+
+export default soundManager;

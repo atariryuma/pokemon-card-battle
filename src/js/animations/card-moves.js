@@ -5,9 +5,14 @@
  * 手札 ↔ フィールド ↔ トラッシュ
  */
 
-import { AnimationCore, ANIMATION_TIMING } from './core.js';
+import { AnimationCore } from './core.js';
+import { ANIMATION_TIMING, CARD_ANIMATION_CONSTANTS } from './constants.js';
 import { CardOrientationManager } from '../card-orientation.js';
 import { findZoneElement, findCardElement, findBenchSlot, areValidElements } from '../dom-utils.js';
+import { createLogger } from '../logger.js';
+
+// ✅ ロガー初期化
+const logger = createLogger('CardMoveAnimations');
 
 export class CardMoveAnimations extends AnimationCore {
     constructor() {
@@ -48,7 +53,7 @@ export class CardMoveAnimations extends AnimationCore {
         const targetElement = findZoneElement(playerId, 'active');
 
         if (!areValidElements(sourceElement, targetElement)) {
-            console.warn(`Cannot animate hand to active: playerId=${playerId}, cardId=${cardId}`);
+            logger.warn('Cannot animate hand to active', { playerId, cardId });
             return;
         }
 
@@ -65,7 +70,7 @@ export class CardMoveAnimations extends AnimationCore {
         const targetElement = findBenchSlot(playerId, benchIndex);
 
         if (!areValidElements(sourceElement, targetElement)) {
-            console.warn(`Cannot animate hand to bench: playerId=${playerId}, cardId=${cardId}, benchIndex=${benchIndex}`);
+            logger.warn('Cannot animate hand to bench', { playerId, cardId, benchIndex });
             return;
         }
 
@@ -79,7 +84,7 @@ export class CardMoveAnimations extends AnimationCore {
         const sourceElement = findCardElement(playerId, cardId, 'active');
 
         if (!sourceElement) {
-            console.warn(`Cannot animate active to discard: playerId=${playerId}, cardId=${cardId}`);
+            logger.warn('Cannot animate active to discard', { playerId, cardId });
             return;
         }
 
@@ -128,82 +133,115 @@ export class CardMoveAnimations extends AnimationCore {
 
     /**
      * 複数カード同時配布（セットアップ時）
+     * ✅ タイマーリーク修正: setTimeoutからシーケンシャル実行に変更
      */
     async dealMultiple(cards, options = {}) {
-        const { staggerDelay = 100 } = options;
-        const promises = cards.map((card, index) => {
-            return new Promise(resolve => {
-                setTimeout(() => {
-                    this.move(card.playerId, card.cardId, card.transition).then(resolve);
-                }, index * staggerDelay);
-            });
-        });
+        const { staggerDelay = 100, parallel = false } = options;
 
-        await Promise.all(promises);
+        if (!Array.isArray(cards) || cards.length === 0) {
+            return;
+        }
+
+        // ✅ 並列実行オプション（従来の動作）
+        if (parallel) {
+            const promises = cards.map((card, index) => {
+                return this.delay(index * staggerDelay).then(() =>
+                    this.move(card.playerId, card.cardId, card.transition)
+                );
+            });
+            await Promise.all(promises);
+            return;
+        }
+
+        // ✅ デフォルト: シーケンシャル実行（タイマーリークなし）
+        for (let i = 0; i < cards.length; i++) {
+            await this.move(cards[i].playerId, cards[i].cardId, cards[i].transition);
+            if (i < cards.length - 1) {
+                await this.delay(staggerDelay);
+            }
+        }
     }
 
     /**
      * 手札配布アニメーション（高度版）
+     * ✅ タイマーリーク修正: シーケンシャル実行に変更
      */
     async dealHand(cards, playerId, options = {}) {
-        const { staggerDelay = 80, withFlip = false } = options;
+        const { staggerDelay = 80, withFlip = false, parallel = false } = options;
 
         if (!Array.isArray(cards)) {
-            console.warn('dealHand: cards should be an array');
+            logger.warn('dealHand: cards should be an array');
             return;
         }
 
         // 手札エリアを取得
         const handElement = findZoneElement(playerId, 'hand');
         if (!handElement) {
-            console.warn(`Hand element not found for ${playerId}`);
+            logger.warn('Hand element not found', { playerId });
             return;
         }
 
-        // 各カードを順番に配布
-        const promises = cards.map((card, index) => {
-            return new Promise(resolve => {
-                setTimeout(async () => {
-                    const cardElement = handElement.children[index];
-                    if (cardElement) {
-                        // ✅ フリップアニメーション追加（Hearthstone/MTG Arena風）
-                        if (withFlip) {
-                            cardElement.style.transform = 'rotateY(90deg) translateY(-30px) scale(0.8)';
-                            cardElement.style.opacity = '0';
-                        } else {
-                            cardElement.style.opacity = '0';
-                            cardElement.style.transform = 'translateY(-30px) scale(0.8)';
-                        }
+        // ✅ アニメーション実行関数
+        const animateCard = async (card, index) => {
+            const cardElement = handElement.children[index];
+            if (!cardElement) return;
 
-                        // フェードインアニメーション
-                        await this.delay(50);
-                        cardElement.style.transition = withFlip
-                            ? 'opacity 300ms ease, transform 500ms ease'
-                            : 'opacity 300ms ease, transform 300ms ease';
-                        cardElement.style.opacity = '1';
-                        cardElement.style.transform = 'translateY(0) scale(1) rotateY(0deg)';
+            // フリップまたは標準アニメーション
+            if (withFlip) {
+                cardElement.style.transform = 'rotateY(90deg) translateY(-30px) scale(0.8)';
+                cardElement.style.opacity = '0';
+            } else {
+                cardElement.style.opacity = '0';
+                cardElement.style.transform = 'translateY(-30px) scale(0.8)';
+            }
 
-                        // ✅ アニメーション完了を待つ
-                        await this.delay(withFlip ? 500 : 300);
+            await this.delay(50);
 
-                        // ✅ 確実にクリーンアップ
-                        cardElement.style.opacity = '1';
-                        cardElement.style.visibility = 'visible';
-                        cardElement.style.display = 'flex';
-                        cardElement.style.transform = 'none';
-                        cardElement.classList.remove('is-preparing-animation');
+            // フェードインアニメーション
+            const fadeDuration = CARD_ANIMATION_CONSTANTS.DEAL_FADE_DURATION;
+            const flipDuration = CARD_ANIMATION_CONSTANTS.DEAL_FLIP_DURATION;
+            cardElement.style.transition = withFlip
+                ? `opacity ${fadeDuration}ms ease, transform ${flipDuration}ms ease`
+                : `opacity ${fadeDuration}ms ease, transform ${fadeDuration}ms ease`;
+            cardElement.style.opacity = '1';
+            cardElement.style.transform = 'translateY(0) scale(1) rotateY(0deg)';
 
-                        // 配布効果音の代わりに軽い振動
-                        if (navigator.vibrate) {
-                            navigator.vibrate(50);
-                        }
-                    }
-                    resolve();
-                }, index * staggerDelay);
-            });
-        });
+            // アニメーション完了を待つ
+            await this.delay(withFlip ? flipDuration : fadeDuration);
 
-        await Promise.all(promises);
+            // クリーンアップ
+            cardElement.style.transition = '';
+            cardElement.classList.remove('is-preparing-animation');
+            cardElement.style.opacity = '1';
+            cardElement.style.visibility = 'visible';
+            cardElement.style.display = 'flex';
+
+            // ✅ 振動フィードバック（安全な使用）
+            if (typeof navigator !== 'undefined' && navigator.vibrate) {
+                try {
+                    navigator.vibrate(CARD_ANIMATION_CONSTANTS.VIBRATION_DURATION);
+                } catch (e) {
+                    // 振動失敗は無視
+                }
+            }
+        };
+
+        // ✅ 並列実行オプション（高速だが競合リスクあり）
+        if (parallel) {
+            const promises = cards.map((card, index) =>
+                this.delay(index * staggerDelay).then(() => animateCard(card, index))
+            );
+            await Promise.all(promises);
+            return;
+        }
+
+        // ✅ デフォルト: シーケンシャル実行（安全）
+        for (let i = 0; i < cards.length; i++) {
+            await animateCard(cards[i], i);
+            if (i < cards.length - 1) {
+                await this.delay(staggerDelay);
+            }
+        }
     }
 
     /**
@@ -215,7 +253,7 @@ export class CardMoveAnimations extends AnimationCore {
         const { staggerDelay = 80 } = options;
 
         if (!Array.isArray(elements)) {
-            console.warn('dealPrize: elements should be an array');
+            logger.warn('dealPrize: elements should be an array');
             return;
         }
 
@@ -249,9 +287,10 @@ export class CardMoveAnimations extends AnimationCore {
     /**
      * 高度なカードドローアニメーション（山札から手札へ）
      * ✅ ハイブリッドモード対応: デッキがDOM に存在しない場合はシンプルなフェードイン
+     * ✅ メモリリーク修正: try-finallyでDOM要素のクリーンアップを保証
      */
     async drawCardFromDeck(playerId, cardElement, options = {}) {
-        const { duration = 600 } = options;
+        const duration = options.duration || CARD_ANIMATION_CONSTANTS.DRAW_DURATION;
 
         const deckElement = findZoneElement(playerId, 'deck');
         const handElement = findZoneElement(playerId, 'hand');
@@ -294,40 +333,43 @@ export class CardMoveAnimations extends AnimationCore {
         // 元のカードを一時的に隠す
         cardElement.style.opacity = '0';
 
-        // DOMに追加
-        document.body.appendChild(animCard);
+        // ✅ メモリリーク修正: try-finallyでクリーンアップを保証
+        try {
+            // DOMに追加
+            document.body.appendChild(animCard);
 
-        // 強制リフロー
-        animCard.offsetHeight;
+            // 強制リフロー（CSSトランジションのトリガー用）
+            animCard.offsetHeight;
 
-        // アニメーション実行
-        return new Promise(resolve => {
-            animCard.style.transition = `all ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
-            animCard.style.left = `${handRect.right - cardElement.offsetWidth}px`;
-            animCard.style.top = `${handRect.top}px`;
-            animCard.style.transform = 'scale(1.05) rotate(3deg)';
+            // アニメーション実行
+            await new Promise(resolve => {
+                animCard.style.transition = `all ${duration}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+                animCard.style.left = `${handRect.right - cardElement.offsetWidth}px`;
+                animCard.style.top = `${handRect.top}px`;
+                animCard.style.transform = 'scale(1.05) rotate(3deg)';
 
-            setTimeout(() => {
-                // 後処理
-                if (animCard.parentNode) {
-                    animCard.parentNode.removeChild(animCard);
-                }
-
-                // 元のカードを表示
-                cardElement.style.opacity = '1';
-                cardElement.style.transform = 'scale(1.1)';
-
-                // 配置完了効果
                 setTimeout(() => {
-                    cardElement.style.transition = 'transform 200ms ease';
-                    cardElement.style.transform = '';
+                    // 元のカードを表示
+                    cardElement.style.opacity = '1';
+                    cardElement.style.transform = 'scale(1.1)';
+
+                    // 配置完了効果
                     setTimeout(() => {
-                        cardElement.style.transition = '';
-                        resolve();
-                    }, 200);
-                }, 100);
-            }, duration);
-        });
+                        cardElement.style.transition = 'transform 200ms ease';
+                        cardElement.style.transform = '';
+                        setTimeout(() => {
+                            cardElement.style.transition = '';
+                            resolve();
+                        }, 200);
+                    }, 100);
+                }, duration);
+            });
+        } finally {
+            // ✅ エラー発生時も確実にクリーンアップ
+            if (animCard && animCard.parentNode) {
+                animCard.parentNode.removeChild(animCard);
+            }
+        }
     }
 
     /**

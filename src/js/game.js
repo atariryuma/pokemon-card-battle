@@ -848,8 +848,10 @@ export class Game {
             {
                 type: 'animation',
                 animation: async () => {
-                    const { animateFlow } = await import('./animations/flow.js');
-                    await animateFlow.activeToBench('player', toBenchIndex);
+                    // ✅ flow.js削除: animate.cardMoveを使用
+                    await animate.cardMove('player', fromActiveId, 'active->bench', {
+                        benchIndex: toBenchIndex
+                    });
                 }
             },
             {
@@ -873,8 +875,10 @@ export class Game {
             {
                 type: 'animation',
                 animation: async () => {
-                    const { animateFlow } = await import('./animations/flow.js');
-                    await animateFlow.handToZone('player', cardId, zone, targetIndex);
+                    // ✅ flow.js削除: animate.cardMoveを使用
+                    await animate.cardMove('player', cardId, `hand->${zone}`, {
+                        targetIndex: targetIndex
+                    });
                 }
             },
             {
@@ -1273,7 +1277,8 @@ export class Game {
                 }
                 // runtimeId 優先で特定（互換で master id も許容）
                 const card = this.state.players.player.hand.find(c => (c.runtimeId === cardId) || (c.id === cardId));
-                if (card && card.card_type === 'Pokémon' && card.stage === 'BASIC') {
+                // ✅ FIX Bug #2: Use 'supertype' instead of 'card_type' (data-manager.js maps card_type → supertype)
+                if (card && card.supertype === 'Pokémon' && card.stage === 'BASIC') {
                     this.selectedCardForSetup = card;
                     // ✅ 選択時は'select'タイプでハイライト
                     this._highlightCard(card.runtimeId || card.id, true, { type: 'select' });
@@ -1284,7 +1289,7 @@ export class Game {
                     }
                     this.state.prompt.message = `「${card.name_ja}」をバトル場かベンチに配置してください。`;
                     this.view.updateStatusMessage(this.state.prompt.message);
-                } else if (card && card.card_type === 'Pokémon') {
+                } else if (card && card.supertype === 'Pokémon') {
                     // 非たねポケモンが選択された場合はトーストで警告
                     this.view.showError('INVALID_INITIAL_POKEMON');
                     // Don't log as warning since this is expected behavior

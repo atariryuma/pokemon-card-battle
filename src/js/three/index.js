@@ -11,3 +11,8 @@ export { CardSlot } from './card-slot.js';
 export { InteractionHandler } from './interaction.js';
 export { GameBoard3D } from './game-board.js';
 
+// 新しいシステム
+export { ParticleManager } from './particle-manager.js';
+export { CameraDirector } from './camera-director.js';
+export { PerformanceMonitor } from './performance-monitor.js';
+export { TextureManager, textureManager } from './texture-manager.js';

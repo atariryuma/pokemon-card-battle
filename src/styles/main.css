@@ -18,5 +18,10 @@
 @import url('./components/_modal.css');
 @import url('./components/_input-controls.css');
 
+/* 2.5 レイアウト - スタート画面 */
+@import url('./layout/_start-screen.css');
+/* 2.6 レイアウト - プレミアムUIオーバーライド */
+@import url('./layout/_premium-ui.css');
+
 /* 4. アニメーション */
 @import url('./animations/_keyframes.css');

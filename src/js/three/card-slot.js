@@ -33,17 +33,18 @@ export class CardSlot {
         const geometry = new THREE.PlaneGeometry(width, height);
 
         // マテリアル（半透明、ホバー時に可視化）
+        // ✅ デバッグ: 不透明度を上げて視覚的に確認可能にする
         this.normalMaterial = new THREE.MeshBasicMaterial({
             color: 0x4488ff,
             transparent: true,
-            opacity: 0.1,
+            opacity: 0.3,  // 0.1 → 0.3（視認性向上）
             side: THREE.DoubleSide,
         });
 
         this.highlightMaterial = new THREE.MeshBasicMaterial({
             color: 0xffdd44,
             transparent: true,
-            opacity: 0.4,
+            opacity: 0.6,  // 0.4 → 0.6（視認性向上）
             side: THREE.DoubleSide,
         });
 
@@ -99,13 +100,16 @@ export class CardSlot {
      */
     setHovered(isHovered) {
         if (this.mesh) {
+            // ✅ デバッグ: ホバー状態をログ
+            console.log(`🎯 CardSlot.setHovered: ${isHovered}`, this.options);
+
             // ✅ ハイライト中はホバー効果をスキップ
             if (this.isHighlighted) {
                 return;
             }
 
-            // ✅ normalMaterialの不透明度のみ変更
-            const opacity = isHovered ? 0.3 : 0.1;
+            // ✅ normalMaterialの不透明度のみ変更（視認性向上版）
+            const opacity = isHovered ? 0.5 : 0.3;  // 0.3/0.1 → 0.5/0.3
             this.normalMaterial.opacity = opacity;
 
             // ✅ 現在のマテリアルがnormalMaterialの場合のみ更新

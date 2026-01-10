@@ -41,7 +41,7 @@
     aspect-ratio: 1;
     margin: 0 auto;
     overflow: visible;
-    pointer-events: auto;
+    pointer-events: auto !important;  /* ✅ 確実にボード全体をクリック可能に */
     user-select: none;
     -webkit-user-select: none;
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -60,10 +60,6 @@ body.three-active #game-board {
     opacity: 0 !important;
 }
 
-body.three-active #three-container {
-    pointer-events: auto;
-}
-
 /* Three.js Container - Fixed Background */
 #three-container {
     position: fixed;
@@ -71,8 +67,8 @@ body.three-active #three-container {
     left: 0;
     width: 100vw;
     height: 100vh;
-    z-index: 1;
-    pointer-events: auto;
+    z-index: 0;  /* ✅ 背景レイヤーだがpointer-eventsを受信可能に（-1だとクリックが通らない） */
+    pointer-events: auto;  /* ✅ Three.jsボードカードをクリック可能に（手札は上のレイヤーで優先） */
 }
 
 /* 背景画像用のレイヤー */

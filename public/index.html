@@ -51,7 +51,8 @@
         {
             "imports": {
                 "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
-                "three/": "https://cdn.jsdelivr.net/npm/three@0.169.0/"
+                "three/": "https://cdn.jsdelivr.net/npm/three@0.169.0/",
+                "gsap": "https://cdn.jsdelivr.net/npm/gsap@3.12.5/+esm"
             }
         }
     </script>
@@ -64,7 +65,38 @@
     <!-- Three.js 3D Canvas Layer (Global Background) -->
     <div id="three-container"></div>
 
-    <div class="game-wrapper">
+    <!-- ✅ Game Over Overlay -->
+    <div id="game-over-overlay" class="hidden">
+        <div class="game-over-content">
+            <h1 id="game-result-title" class="result-title">VICTORY</h1>
+            <div id="game-result-reason" class="result-reason">Opponent ran out of prize cards!</div>
+            <button id="play-again-btn" class="start-btn start-btn-primary">
+                Play Again
+            </button>
+        </div>
+    </div>
+
+    <!-- ✅ Start Screen Overlay (Glassmorphism) -->
+    <div id="start-screen">
+        <div class="start-logo-container">
+            <div class="start-logo-text">POKÉMON</div>
+            <div class="start-logo-sub">TRADING CARD GAME 3D EXPERIMENT</div>
+        </div>
+
+        <div class="start-menu-container">
+            <button id="start-btn-primary" class="start-btn start-btn-primary">
+                Game Start
+            </button>
+            <!-- Future buttons: Deck Builder, Settings -->
+        </div>
+
+        <div class="start-footer">
+            <p>Developer Preview v0.9.5 | Three.js WebGL</p>
+        </div>
+    </div>
+
+    <!-- Game Wrapper (Initially Hidden) -->
+    <div id="game-wrapper" class="game-wrapper hidden">
 
         <!-- ✅ Three.js専用: DOM版ゲームボードは削除 -->
         <div id="game-stage" class="game-stage w-full flex flex-col items-center"
@@ -116,10 +148,10 @@
                 </button>
             </div>
         </div>
-    </div>
+    </div><!-- End of game-wrapper -->
 
-    <!-- Game Status Panel (グリッド外の固定位置) -->
-    <div id="game-status-panel" class="">
+    <!-- Game Status Panel (グリッド外の固定位置 - Initially Hidden) -->
+    <div id="game-status-panel" class="hidden">
         <div class="status-panel-content">
             <!-- Header Section -->
             <div class="status-panel-header">

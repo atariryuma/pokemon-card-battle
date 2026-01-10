@@ -84,8 +84,6 @@ class InputManager {
         // ゲームパッド接続イベント
         window.addEventListener('gamepadconnected', this._boundGamepadConnected);
         window.addEventListener('gamepaddisconnected', this._boundGamepadDisconnected);
-
-        console.log('🎮 Input Manager initialized');
     }
 
     /**

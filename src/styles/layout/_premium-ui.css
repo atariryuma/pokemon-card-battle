@@ -1,0 +1,209 @@
+/* ==========================================
+   Premium UI Overrides (The "Ultimate" Look)
+   Glassmorphism & Juicy Interactions
+   ========================================== */
+
+/* --- Game Status Panel Overhaul --- */
+#game-status-panel {
+    /* Slightly less visible when not hovering to avoid distractions */
+    opacity: 0.85;
+    transition: opacity 0.4s ease;
+}
+
+#game-status-panel:hover {
+    opacity: 1;
+}
+
+.status-panel-content {
+    /* Pure Glassmorphism */
+    background: rgba(20, 20, 30, 0.4) !important;
+    backdrop-filter: blur(20px) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    box-shadow:
+        0 8px 32px 0 rgba(0, 0, 0, 0.37),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.05) !important;
+    border-radius: 24px !important;
+}
+
+/* Remove old decorative dots/lines */
+.status-panel-content::before {
+    display: none;
+}
+
+.status-panel-header {
+    background: transparent !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Info Sections */
+.status-info-section {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+    transition: background 0.3s;
+}
+
+.status-info-section:hover {
+    background: rgba(255, 255, 255, 0.07) !important;
+}
+
+/* Typography Polish */
+.status-info-title {
+    color: rgba(255, 255, 255, 0.6) !important;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600 !important;
+    letter-spacing: 0.05em !important;
+    text-shadow: none !important;
+}
+
+/* --- Action Buttons (HUD) --- */
+/* Override default button styles */
+.pokemon-action-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    padding: 12px 24px;
+    color: white;
+    font-family: 'Noto Sans JP', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow:
+        0 4px 6px -1px rgba(0, 0, 0, 0.1),
+        0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Gradient Borders for Specific Actions */
+#attack-button-float {
+    background: linear-gradient(135deg, rgba(220, 38, 38, 0.2) 0%, rgba(220, 38, 38, 0.1) 100%);
+    border-color: rgba(220, 38, 38, 0.5);
+}
+
+#start-game-button-float,
+#end-turn-button-float {
+    background: linear-gradient(135deg, rgba(37, 99, 235, 0.2) 0%, rgba(37, 99, 235, 0.1) 100%);
+    border-color: rgba(37, 99, 235, 0.5);
+}
+
+#evolve-button-float {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.1) 100%);
+    border-color: rgba(16, 185, 129, 0.5);
+}
+
+/* Juicy Hover Effects */
+.pokemon-action-btn:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow:
+        0 10px 15px -3px rgba(0, 0, 0, 0.3),
+        0 4px 6px -2px rgba(0, 0, 0, 0.1);
+    border-color: rgba(255, 255, 255, 0.6);
+}
+
+.pokemon-action-btn:active {
+    transform: translateY(1px) scale(0.98);
+}
+
+/* Shine Effect on Hover */
+.pokemon-action-btn::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transform: skewX(-20deg);
+    transition: 0.5s;
+    pointer-events: none;
+}
+
+.pokemon-action-btn:hover::after {
+    left: 150%;
+    transition: 0.5s;
+}
+
+/* --- Hand Area Enhancements --- */
+/* Remove background from hand container to keep it purely floating */
+#player-hand-container {
+    background: transparent;
+}
+
+/* Card Slot Styling in Hand */
+#player-hand .hand-slot {
+    border-radius: 12px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* Selected/Active Card Glow */
+#player-hand .hand-slot.active,
+#player-hand .hand-slot.selected {
+    box-shadow:
+        0 0 0 2px #FFD700,
+        0 8px 30px rgba(255, 215, 0, 0.5);
+    z-index: 100;
+}
+
+/* --- Turn Notifications (Center Screen) --- */
+.turn-notification {
+    position: fixed;
+    top: 30%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 20px 60px;
+    font-size: 3rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-radius: 8px;
+    z-index: 2000;
+    pointer-events: none;
+    opacity: 0;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(4px);
+}
+
+.turn-notification.show {
+    animation: turnBannerAnim 2.5s ease-in-out forwards;
+}
+
+@keyframes turnBannerAnim {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -40%) scale(0.8);
+    }
+
+    15% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1.1);
+    }
+
+    20% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    80% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -60%) scale(1.1);
+    }
+}

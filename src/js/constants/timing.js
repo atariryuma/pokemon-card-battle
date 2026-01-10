@@ -55,3 +55,8 @@ export const SHAKE_CONFIG = {
 export const MULLIGAN_CONFIG = {
     MAX_COUNT: 3,                      // マリガン最大回数
 };
+
+export const DOM_VERIFICATION = {
+    MAX_ATTEMPTS: 20,                  // DOM要素準備確認の最大リトライ回数
+    RETRY_INTERVAL: 50,                // リトライ間隔（ms）
+};

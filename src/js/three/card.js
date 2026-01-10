@@ -1,39 +1,72 @@
 /**
  * THREE.JS CARD
  * 
- * 3Dカードオブジェクト
+ * 3Dカードオブジェクト（最適化済み）
+ * - 共有ジオメトリプール（メモリ効率化）
  * - BoxGeometry で厚みを表現
  * - 前面/背面に異なるテクスチャ
  * - アニメーション対応
  */
 
 import * as THREE from 'three';
+import { textureManager } from './texture-manager.js';
 
-// テクスチャキャッシュ
-const textureCache = new Map();
-const loader = new THREE.TextureLoader();
+// ==========================================
+// 共有ジオメトリプール（最適化）
+// ==========================================
 
 /**
- * テクスチャを非同期でロード（キャッシュ対応）
+ * カードジオメトリを共有（同じサイズのカードは同じジオメトリを再利用）
  */
-async function loadTexture(url) {
-    if (textureCache.has(url)) {
-        return textureCache.get(url);
+class GeometryPool {
+    constructor() {
+        this.pool = new Map();
     }
 
-    return new Promise((resolve, reject) => {
-        loader.load(
-            url,
-            (texture) => {
-                texture.colorSpace = THREE.SRGBColorSpace;
-                textureCache.set(url, texture);
-                resolve(texture);
-            },
-            undefined,
-            reject
-        );
-    });
+    /**
+     * ジオメトリを取得（キャッシュから or 新規作成）
+     */
+    get(width, height, depth) {
+        const key = `${width}_${height}_${depth}`;
+
+        if (!this.pool.has(key)) {
+            const geometry = new THREE.BoxGeometry(width, height, depth);
+            this.pool.set(key, geometry);
+            console.log(`✅ Created shared geometry: ${key}`);
+        }
+
+        return this.pool.get(key);
+    }
+
+    /**
+     * すべてのジオメトリを破棄
+     */
+    disposeAll() {
+        for (const [key, geometry] of this.pool.entries()) {
+            geometry.dispose();
+            console.log(`🗑️ Geometry disposed: ${key}`);
+        }
+        this.pool.clear();
+    }
 }
+
+// シングルトンインスタンス
+const geometryPool = new GeometryPool();
+
+// ==========================================
+// マテリアルプール（最適化）
+// ==========================================
+
+/**
+ * エッジマテリアルを共有（カード側面）
+ */
+const sharedMaterials = {
+    edge: new THREE.MeshStandardMaterial({
+        color: 0x333333,
+        roughness: 0.8,
+        metalness: 0.1
+    })
+};
 
 export class Card3D {
     constructor(options = {}) {
@@ -74,58 +107,62 @@ export class Card3D {
     }
 
     /**
-     * カードメッシュを作成
+     * カードメッシュを作成（最適化済み）
      */
     async create() {
         const { width, height, depth, frontTexture, backTexture } = this.options;
 
-        // ジオメトリ
-        const geometry = new THREE.BoxGeometry(width, height, depth);
+        // 共有ジオメトリを使用（メモリ効率化）
+        const geometry = geometryPool.get(width, height, depth);
 
-        // テクスチャをロード
+        // テクスチャマネージャーでロード（最適化）
         let frontTex = null;
         let backTex = null;
 
         try {
             if (frontTexture) {
-                frontTex = await loadTexture(frontTexture);
+                frontTex = await textureManager.loadOptimized(frontTexture, {
+                    anisotropy: 4,
+                    encoding: THREE.sRGBEncoding
+                });
             }
-            backTex = await loadTexture(backTexture);
+            backTex = await textureManager.loadOptimized(backTexture, {
+                anisotropy: 4,
+                encoding: THREE.sRGBEncoding
+            });
         } catch (error) {
             console.warn('Card texture load failed:', error);
         }
 
-        // マテリアル配列（6面）
-        // BoxGeometry の面順序: +X, -X, +Y, -Y, +Z, -Z
-        // カードの場合: 左, 右, 上, 下, 前面, 背面
-        const edgeMaterial = new THREE.MeshStandardMaterial({
-            color: 0x333333,  // カードエッジ色
-        });
-
+        // マテリアル作成（前面/背面のみ個別、エッジは共有）
         const frontMaterial = new THREE.MeshStandardMaterial({
             map: frontTex,
             color: frontTex ? 0xffffff : 0x4a4a4a,
+            roughness: 0.6,
+            metalness: 0.1
         });
 
         const backMaterial = new THREE.MeshStandardMaterial({
             map: backTex,
             color: backTex ? 0xffffff : 0x2a4a2a,
+            roughness: 0.6,
+            metalness: 0.1
         });
 
+        // マテリアル配列（エッジは共有マテリアル使用）
         const materials = [
-            edgeMaterial,   // 右 (+X)
-            edgeMaterial,   // 左 (-X)
-            edgeMaterial,   // 上 (+Y)
-            edgeMaterial,   // 下 (-Y)
-            frontMaterial,  // 前面 (+Z) - カード表
-            backMaterial,   // 背面 (-Z) - カード裏
+            sharedMaterials.edge,   // 右 (+X)
+            sharedMaterials.edge,   // 左 (-X)
+            sharedMaterials.edge,   // 上 (+Y)
+            sharedMaterials.edge,   // 下 (-Y)
+            frontMaterial,          // 前面 (+Z) - カード表
+            backMaterial,           // 背面 (-Z) - カード裏
         ];
 
         this.mesh = new THREE.Mesh(geometry, materials);
 
         // ユーザーデータを設定
         this.mesh.userData = this.userData;
-        // ✅ ホバー効果用の初期値を設定
         this.mesh.userData.hoverLiftY = 0;
 
         // 初期位置

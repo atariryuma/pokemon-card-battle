@@ -170,8 +170,9 @@ class AnimationManager {
      * @param {...any} args - 引数
      */
     async execute(animationFunction, ...args) {
-        // アニメーション無効時はスキップ
-        if (!this.settings.enabled || this.settings.reduceMotion) {
+        // ✅ アニメーション完全有効化（reduceMotionチェック削除）
+        // ゲーム演出はアクセシビリティ設定に関わらず表示する
+        if (!this.settings.enabled) {
             return;
         }
 

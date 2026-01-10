@@ -5,10 +5,10 @@
 /* タブレット横向き / 小型デスクトップ */
 @media (max-width: 1200px) {
     :root {
-        --hand-card-width: clamp(60px, 10vw, 100px);
-        --hand-card-height: clamp(84px, 14vw, 140px);
-        --hand-gap: clamp(3px, 0.5vw, 8px);
-        --playmat-size: min(70vh, 90vw);
+        --hand-card-width: clamp(40px, 8vmin, 100px);
+        --hand-card-height: clamp(56px, 11vmin, 140px);
+        --hand-gap: clamp(2px, 1vmin, 8px);
+        --playmat-size: min(70vh, 50vw);
     }
 
     #game-status-panel {
@@ -19,10 +19,10 @@
 /* タブレット縦向き */
 @media (max-width: 768px) {
     :root {
-        --hand-card-width: clamp(55px, 14vw, 85px);
-        --hand-card-height: clamp(77px, 19.6vw, 119px);
-        --hand-gap: clamp(2px, 0.4vw, 6px);
-        --playmat-size: min(60vh, 95vw);
+        --hand-card-width: clamp(30px, 10vmin, 85px);
+        --hand-card-height: clamp(42px, 14vmin, 119px);
+        --hand-gap: clamp(1px, 0.8vmin, 6px);
+        --playmat-size: min(60vh, 85vw);
     }
 
     .cpu-hand-independent {
@@ -92,10 +92,10 @@
 /* スマートフォン */
 @media (max-width: 480px) {
     :root {
-        --hand-card-width: clamp(48px, 18vw, 70px);
-        --hand-card-height: clamp(67px, 25.2vw, 98px);
-        --hand-gap: clamp(1px, 0.3vw, 4px);
-        --playmat-size: min(55vh, 98vw);
+        --hand-card-width: clamp(25px, 15vmin, 70px);
+        --hand-card-height: clamp(35px, 21vmin, 98px);
+        --hand-gap: clamp(1px, 0.5vmin, 4px);
+        --playmat-size: min(55vh, 90vw);
     }
 
     .cpu-hand-independent {
@@ -222,6 +222,7 @@
 
 /* アニメーション無効化対応 */
 @media (prefers-reduced-motion: reduce) {
+
     .modal-enter,
     .modal-exit,
     .toast-enter,

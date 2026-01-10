@@ -5,7 +5,8 @@
 
 export class GameLogger {
     constructor() {
-        this.isEnabled = true;
+        // ✅ game-loggerを無効化（game-progress-loggerを使用）
+        this.isEnabled = false;
     }
 
     /**

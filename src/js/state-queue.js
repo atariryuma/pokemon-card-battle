@@ -71,18 +71,22 @@ export class StateQueue {
             const task = this.queue.shift();
 
             try {
-                // 最新の状態を取得
-                const latestState = this.currentState;
+                // ✅ FIX #4: 非同期処理の競合対応
+                // 状態の不変性を保証するため、ディープコピーを使用
+                const latestState = this._deepCloneState(this.currentState);
 
                 // 更新関数を実行
                 const newState = await task.updateFunction(latestState);
 
-                // 状態を更新
-                this.currentState = newState;
+                // 状態を更新（イミュータブル）
+                this.currentState = this._deepCloneState(newState);
 
-                // コールバック経由でゲームに状態を反映
+                // コールバック経由でゲームに状態を反映（非同期化）
                 if (this.stateUpdateCallback) {
-                    this.stateUpdateCallback(newState);
+                    // 次のマイクロタスクで実行し、キュー処理をブロックしない
+                    Promise.resolve().then(() => {
+                        this.stateUpdateCallback(newState);
+                    });
                 }
 
                 // Promiseを解決
@@ -94,6 +98,24 @@ export class StateQueue {
         }
 
         this.isProcessing = false;
+    }
+
+    /**
+     * 状態のディープクローンを作成
+     * @private
+     * @param {Object} state - クローンする状態
+     * @returns {Object} クローンされた状態
+     */
+    _deepCloneState(state) {
+        if (!state) return null;
+
+        // オブジェクトのディープクローン（パフォーマンスと信頼性のバランス）
+        try {
+            return JSON.parse(JSON.stringify(state));
+        } catch (error) {
+            console.warn('⚠️ StateQueue: Failed to deep clone state, using shallow copy', error);
+            return { ...state };
+        }
     }
 
     /**

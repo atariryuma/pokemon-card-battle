@@ -93,6 +93,43 @@ export class GameBoard3D {
         return this.interaction;
     }
 
+    /**
+     * カードを安全に取得（Promiseの場合はnullを返す）
+     * レースコンディション対策: カードがまだロード中の場合はスキップ
+     * @param {string} runtimeId - カードのランタイムID
+     * @returns {Card3D|null} カードオブジェクト、またはnull（ロード中/存在しない場合）
+     */
+    _getCard(runtimeId) {
+        if (!runtimeId) return null;
+        const card = this.cards.get(runtimeId);
+        if (!card) return null;
+        // Promiseの場合はまだロード中
+        if (card instanceof Promise) return null;
+        // Card3Dオブジェクトであることを確認
+        if (!card.getMesh) return null;
+        return card;
+    }
+
+    /**
+     * カードを安全に取得（非同期版 - 完了まで待つ）
+     * @param {string} runtimeId - カードのランタイムID
+     * @returns {Promise<Card3D|null>} カードオブジェクト
+     */
+    async _getCardAsync(runtimeId) {
+        if (!runtimeId) return null;
+        const card = this.cards.get(runtimeId);
+        if (!card) return null;
+        // Promiseの場合は完了を待つ
+        if (card instanceof Promise) {
+            try {
+                return await card;
+            } catch {
+                return null;
+            }
+        }
+        return card;
+    }
+
 
     /**
      * スロット作成（slots_named配列から）
@@ -326,7 +363,7 @@ export class GameBoard3D {
             }
 
             // ✅ 選択エフェクトを表示（ボード上のカードのみ）
-            const clickedCard = this.cards.get(userData.runtimeId);
+            const clickedCard = this._getCard(userData.runtimeId);
             if (clickedCard) {
                 // 前の選択をクリア
                 if (this.selectedCard && this.selectedCard !== clickedCard) {
@@ -367,7 +404,7 @@ export class GameBoard3D {
         }
 
         if (userData?.type === 'card') {
-            const card = this.cards.get(userData.runtimeId);
+            const card = this._getCard(userData.runtimeId);
             if (card) {
                 card.setHovered(isHovered);
             }
@@ -380,16 +417,10 @@ export class GameBoard3D {
     _handleDragStart(data) {
         const { userData } = data;
         if (userData?.type === 'card') {
-            // ✅ ハイブリッド方式: 手札のドラッグはDOM版に任せる（将来的に実装）
+            // ✅ ハイブリッド方式: 手札のドラッグはDOM版に任せる
             if (userData.zone === 'hand') {
                 return;
             }
-            // プレイヤーの手札のみドラッグ可能（現在は無効化）
-            // if (userData.owner === 'player' && userData.zone === 'hand') {
-            //     // ドラッグ可能なスロットをハイライト
-            //     this.highlightSlotsByZone('active', 'player');
-            //     this.highlightSlotsByZone('bench', 'player');
-            // }
         }
     }
 
@@ -404,7 +435,7 @@ export class GameBoard3D {
 
         // ドロップされなかった場合は元の位置に戻す
         if (!dropped && object) {
-            const card = this.cards.get(object.userData?.runtimeId);
+            const card = this._getCard(object.userData?.runtimeId);
             if (card) {
                 const baseY = card.getMesh()?.userData?.baseY || 0;
                 card.setPosition(
@@ -536,6 +567,38 @@ export class GameBoard3D {
      * カードを追加
      */
     async addCard(runtimeId, options) {
+        // ✅ 重複防止: 既に同じruntimeIdのカードが存在する場合はスキップ
+        // レースコンディション対策: awaitの前にマップに仮登録する
+        if (this.cards.has(runtimeId)) {
+            const existing = this.cards.get(runtimeId);
+            // まだ作成中の場合は完了を待つ
+            if (existing instanceof Promise) {
+                return existing;
+            }
+            console.warn(`⚠️ addCard: Card "${runtimeId}" already exists, skipping duplicate`);
+            return existing;
+        }
+
+        // ✅ 先にPromiseとしてマップに登録（レースコンディション防止）
+        const cardPromise = this._createCard(runtimeId, options);
+        this.cards.set(runtimeId, cardPromise);
+
+        try {
+            const card = await cardPromise;
+            // 完了したら実際のカードオブジェクトに置き換え
+            this.cards.set(runtimeId, card);
+            return card;
+        } catch (error) {
+            // エラー時はマップから削除
+            this.cards.delete(runtimeId);
+            throw error;
+        }
+    }
+
+    /**
+     * カード作成の内部メソッド
+     */
+    async _createCard(runtimeId, options) {
         const card = new Card3D({
             runtimeId,
             backTexture: this.options.cardBackTexture,
@@ -550,7 +613,8 @@ export class GameBoard3D {
             card.layFlat();
         }
 
-        // ✅ active/benchゾーンのカードは裏向きで開始（フリップアニメーション用）
+        // ✅ active/benchゾーンのカードは裏向きで開始（セットアップ中）
+        // ゲーム開始時にフリップアニメーションで表向きにする
         if (options.zone === 'active' || options.zone === 'bench') {
             card.showBack();
         }
@@ -562,7 +626,6 @@ export class GameBoard3D {
 
         this.threeScene.add(mesh);
         this.interaction.register(mesh);
-        this.cards.set(runtimeId, card);
 
         // saveBasePosition は呼び出し側で位置設定後に呼ぶ
         return card;
@@ -574,9 +637,18 @@ export class GameBoard3D {
     removeCard(runtimeId) {
         const card = this.cards.get(runtimeId);
         if (card) {
-            this.interaction.unregister(card.getMesh());
-            this.threeScene.remove(card.getMesh());
-            card.dispose();
+            // Promiseの場合は作成中なのでスキップ（完了後に削除が必要な場合は再度呼び出す）
+            if (card instanceof Promise) {
+                // ✅ テスト中での高速状態更新時に発生する正常な動作（警告は不要）
+                return;
+            }
+            if (card.getMesh) {
+                this.interaction.unregister(card.getMesh());
+                this.threeScene.remove(card.getMesh());
+            }
+            if (card.dispose) {
+                card.dispose();
+            }
             this.cards.delete(runtimeId);
         }
     }
@@ -588,6 +660,11 @@ export class GameBoard3D {
     updateAnimations(time) {
         // すべてのカードのアニメーションを更新
         this.cards.forEach(card => {
+            // ✅ Promiseの場合はまだロード中なのでスキップ
+            if (card instanceof Promise) return;
+            // カードオブジェクトでない場合もスキップ
+            if (!card.updateBreathing) return;
+
             card.updateBreathing(time);
             card.updateGlow(time);
             card.updateConditionAnimations(time);
@@ -598,7 +675,7 @@ export class GameBoard3D {
      * カードの選択状態を設定
      */
     setCardSelected(runtimeId, selected) {
-        const card = this.cards.get(runtimeId);
+        const card = this._getCard(runtimeId);
         if (card) {
             card.setSelected(selected);
         }
@@ -608,7 +685,7 @@ export class GameBoard3D {
      * カードのハイライト状態を設定
      */
     setCardHighlighted(runtimeId, highlighted) {
-        const card = this.cards.get(runtimeId);
+        const card = this._getCard(runtimeId);
         if (card) {
             card.setHighlighted(highlighted);
         }
@@ -618,14 +695,20 @@ export class GameBoard3D {
      * 全カードの選択状態を解除
      */
     clearAllCardSelections() {
-        this.cards.forEach(card => card.setSelected(false));
+        this.cards.forEach(card => {
+            if (card instanceof Promise || !card.setSelected) return;
+            card.setSelected(false);
+        });
     }
 
     /**
      * 全カードのハイライトを解除
      */
     clearAllCardHighlights() {
-        this.cards.forEach(card => card.setHighlighted(false));
+        this.cards.forEach(card => {
+            if (card instanceof Promise || !card.setHighlighted) return;
+            card.setHighlighted(false);
+        });
     }
 
     // ==========================================
@@ -636,9 +719,15 @@ export class GameBoard3D {
      * カードの攻撃アニメーション
      */
     async animateCardAttack(runtimeId, duration = 400) {
-        const card = this.cards.get(runtimeId);
+        console.log(`🎬 GameBoard3D.animateCardAttack called: runtimeId="${runtimeId}"`);
+        console.log(`🔍 Cards in map:`, Array.from(this.cards.keys()));
+        const card = await this._getCardAsync(runtimeId);
+        console.log(`🎬 Card found:`, card ? `yes (mesh: ${!!card.mesh})` : 'no');
         if (card) {
             await card.animateAttack(duration);
+            console.log(`✅ animateAttack completed for ${runtimeId}`);
+        } else {
+            console.warn(`⚠️ No card found for runtimeId="${runtimeId}" - animation skipped`);
         }
     }
 
@@ -646,9 +735,14 @@ export class GameBoard3D {
      * カードのダメージシェイクアニメーション
      */
     async animateCardDamage(runtimeId, duration = 500, intensity = 8) {
-        const card = this.cards.get(runtimeId);
+        console.log(`🎬 GameBoard3D.animateCardDamage called: runtimeId="${runtimeId}"`);
+        const card = await this._getCardAsync(runtimeId);
+        console.log(`🎬 Card found for damage:`, card ? 'yes' : 'no');
         if (card) {
             await card.animateDamageShake(duration, intensity);
+            console.log(`✅ animateDamageShake completed for ${runtimeId}`);
+        } else {
+            console.warn(`⚠️ No card found for runtimeId="${runtimeId}" - damage animation skipped`);
         }
     }
 
@@ -656,7 +750,7 @@ export class GameBoard3D {
      * カードのノックアウトアニメーション
      */
     async animateCardKnockout(runtimeId, duration = 800) {
-        const card = this.cards.get(runtimeId);
+        const card = await this._getCardAsync(runtimeId);
         if (card) {
             await card.animateKnockout(duration);
         }
@@ -666,7 +760,7 @@ export class GameBoard3D {
      * カードのHPフラッシュアニメーション
      */
     async animateCardHPFlash(runtimeId, duration = 400) {
-        const card = this.cards.get(runtimeId);
+        const card = await this._getCardAsync(runtimeId);
         if (card) {
             await card.animateHPFlash(duration);
         }
@@ -769,7 +863,7 @@ export class GameBoard3D {
      * カード配布アニメーション
      */
     async animateCardDeal(runtimeId, duration = 600) {
-        const card = this.cards.get(runtimeId);
+        const card = await this._getCardAsync(runtimeId);
         if (card) {
             await card.animateDealCard(duration);
         }
@@ -779,7 +873,7 @@ export class GameBoard3D {
      * カードドローアニメーション
      */
     async animateCardDraw(runtimeId, duration = 400) {
-        const card = this.cards.get(runtimeId);
+        const card = await this._getCardAsync(runtimeId);
         if (card) {
             await card.animateDrawCard(duration);
         }
@@ -789,7 +883,7 @@ export class GameBoard3D {
      * カードプレイアニメーション
      */
     async animateCardPlay(runtimeId, duration = 400) {
-        const card = this.cards.get(runtimeId);
+        const card = await this._getCardAsync(runtimeId);
         if (card) {
             await card.animatePlayCard(duration);
         }
@@ -799,7 +893,7 @@ export class GameBoard3D {
      * カードをアクティブに移動するアニメーション
      */
     async animateCardToActive(runtimeId, duration = 400) {
-        const card = this.cards.get(runtimeId);
+        const card = await this._getCardAsync(runtimeId);
         if (card) {
             await card.animateToActive(duration);
         }
@@ -809,7 +903,7 @@ export class GameBoard3D {
      * カードをベンチに移動するアニメーション
      */
     async animateCardToBench(runtimeId, duration = 400) {
-        const card = this.cards.get(runtimeId);
+        const card = await this._getCardAsync(runtimeId);
         if (card) {
             await card.animateToBench(duration);
         }
@@ -819,7 +913,7 @@ export class GameBoard3D {
      * ベンチ→アクティブ昇格アニメーション
      */
     async animateBenchToActive(pokemonId, benchIndex, duration = 500) {
-        const card = this.cards.get(pokemonId);
+        const card = await this._getCardAsync(pokemonId);
         if (card) {
             await card.animateToActive(duration);
         }
@@ -829,7 +923,7 @@ export class GameBoard3D {
      * 進化アニメーション
      */
     async animateCardEvolution(runtimeId, duration = 800) {
-        const card = this.cards.get(runtimeId);
+        const card = await this._getCardAsync(runtimeId);
         if (card) {
             await card.animateEvolution(duration);
         }
@@ -839,7 +933,7 @@ export class GameBoard3D {
      * カードフリップアニメーション
      */
     async flipCard(runtimeId, duration = 600) {
-        const card = this.cards.get(runtimeId);
+        const card = await this._getCardAsync(runtimeId);
         if (card) {
             await card.flip(duration);
         }
@@ -849,7 +943,7 @@ export class GameBoard3D {
      * エネルギーアタッチアニメーション
      */
     async animateCardEnergyAttach(runtimeId, duration = 600) {
-        const card = this.cards.get(runtimeId);
+        const card = await this._getCardAsync(runtimeId);
         if (card) {
             await card.animateEnergyAttach(duration);
         }
@@ -859,7 +953,7 @@ export class GameBoard3D {
      * 回復グローアニメーション
      */
     async animateCardHeal(runtimeId, duration = 400) {
-        const card = this.cards.get(runtimeId);
+        const card = await this._getCardAsync(runtimeId);
         if (card) {
             await card.animateHealGlow(duration);
         }
@@ -869,7 +963,7 @@ export class GameBoard3D {
      * サイドカード取得アニメーション
      */
     async animateCardPrizeTake(runtimeId, duration = 400) {
-        const card = this.cards.get(runtimeId);
+        const card = await this._getCardAsync(runtimeId);
         if (card) {
             await card.animatePrizeTake(duration);
         }
@@ -883,7 +977,7 @@ export class GameBoard3D {
      * カードの特殊状態を設定
      */
     setCardCondition(runtimeId, condition, enabled) {
-        const card = this.cards.get(runtimeId);
+        const card = this._getCard(runtimeId);
         if (!card) return;
 
         switch (condition) {
@@ -909,7 +1003,7 @@ export class GameBoard3D {
      * タイプ別グロー効果を設定
      */
     setCardTypeGlow(runtimeId, type) {
-        const card = this.cards.get(runtimeId);
+        const card = this._getCard(runtimeId);
         if (card) {
             card.setTypeGlow(type);
         }
@@ -919,7 +1013,7 @@ export class GameBoard3D {
      * タイプ別グロー効果を解除
      */
     clearCardTypeGlow(runtimeId) {
-        const card = this.cards.get(runtimeId);
+        const card = this._getCard(runtimeId);
         if (card) {
             card._removeGlowEffect();
         }
@@ -930,7 +1024,11 @@ export class GameBoard3D {
      */
     dispose() {
         this.slots.forEach(slot => slot.dispose());
-        this.cards.forEach(card => card.dispose());
+        this.cards.forEach(card => {
+            // Promiseやnullの場合はスキップ
+            if (card instanceof Promise || !card.dispose) return;
+            card.dispose();
+        });
         this.interaction.dispose();
         this.playmat.dispose();
         this.threeScene.dispose();

@@ -164,8 +164,15 @@ export class EventBus {
             timestamp: Date.now(),
         };
 
-        // 履歴に記録
-        this.eventHistory.push(event);
+        // ✅ FIX #3: イベント履歴の軽量化 - 大きなオブジェクトの代わりにサマリーを保存
+        const eventSummary = {
+            type: eventType,
+            timestamp: Date.now(),
+            // 大きなstateオブジェクトの代わりに必要最小限の情報のみ記録
+            summary: this._summarizeEventData(eventType, data)
+        };
+
+        this.eventHistory.push(eventSummary);
         if (this.eventHistory.length > this.maxHistorySize) {
             this.eventHistory.shift();
         }
@@ -318,8 +325,47 @@ export class EventBus {
      */
     getListenerCount(eventType) {
         const count = (this.listeners.get(eventType)?.length || 0) +
-                     (this.onceListeners.get(eventType)?.length || 0);
+            (this.onceListeners.get(eventType)?.length || 0);
         return count;
+    }
+
+    /**
+     * イベントデータを軽量なサマリーに変換
+     * @private
+     * @param {string} eventType - イベントタイプ
+     * @param {*} data - 元のイベントデータ
+     * @returns {string|Object} サマリー情報
+     */
+    _summarizeEventData(eventType, data) {
+        // イベントタイプ別に必要最小限の情報のみを抽出
+        switch (eventType) {
+            case GameEventTypes.STATE_UPDATED:
+                return {
+                    phase: data.state?.phase,
+                    turnPlayer: data.state?.turnPlayer,
+                    context: data.context
+                };
+            case GameEventTypes.CARD_DRAWN:
+            case GameEventTypes.CARD_PLAYED:
+                return {
+                    cardId: data.cardId,
+                    playerId: data.playerId
+                };
+            case GameEventTypes.DAMAGE_DEALT:
+                return {
+                    targetId: data.targetId,
+                    damage: data.damage
+                };
+            case GameEventTypes.TURN_STARTED:
+            case GameEventTypes.TURN_ENDED:
+                return {
+                    turnPlayer: data.turnPlayer,
+                    turnNumber: data.turnNumber
+                };
+            default:
+                // その他のイベントは型のみ記録
+                return typeof data === 'object' ? Object.keys(data).join(',') : String(data);
+        }
     }
 }
 
@@ -329,7 +375,6 @@ export const eventBus = new EventBus();
 // デバッグ用にグローバルに公開（開発環境のみ）
 if (typeof window !== 'undefined') {
     window.__eventBus = eventBus;
-    // デバッグモードを有効化してイベントフローを可視化
-    eventBus.setDebugMode(true);
-    console.log('📡 EventBus debug mode enabled - All events will be logged');
+    // ✅ EventBusデバッグモードを無効化（本番モード）
+    eventBus.setDebugMode(false);
 }

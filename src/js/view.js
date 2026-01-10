@@ -183,8 +183,6 @@ export class View {
         eventBus.on(GameEventTypes.POKEMON_KNOCKED_OUT, (data) => {
             console.log(`📡 EventBus: Pokemon knocked out: ${data.pokemonId}`);
         });
-
-        console.log('📡 EventBus listeners registered in View');
     }
 
     /**
@@ -353,7 +351,7 @@ export class View {
 
     // ✅ Three.js専用: DOM版hand click delegationは削除（Three.jsが直接処理）
 
-    render(state) {
+    async render(state) {
         // 差分レンダリング：変更があった領域のみを更新
         this._detectChanges(state);
 
@@ -383,11 +381,13 @@ export class View {
         // ターンに応じた視覚的フィードバックを更新
         this._updateTurnVisualFeedback(state);
 
-        // Three.js 3Dビューにも状態を反映
+        // ✅ Three.js 3Dビューにも状態を反映（awaitで完了を待つ）
         if (this.use3DView && this.threeViewBridge.isActive()) {
-            this.threeViewBridge.render(state).catch(err => {
+            try {
+                await this.threeViewBridge.render(state);
+            } catch (err) {
                 console.warn('Three.js render warning:', err);
-            });
+            }
         }
     }
 

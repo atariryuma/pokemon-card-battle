@@ -8,17 +8,21 @@
     top: clamp(10px, 2vh, 24px);
     left: 50%;
     transform: translateX(-50%);
-    width: clamp(350px, 50vw, 600px); /* 60vw → 50vw, 700px → 600px (小さく) */
-    height: clamp(80px, 12vh, 110px); /* 15vh → 12vh, 140px → 110px (小さく) */
+    width: clamp(350px, 50vw, 600px);
+    /* 60vw → 50vw, 700px → 600px (小さく) */
+    height: clamp(80px, 12vh, 110px);
+    /* 15vh → 12vh, 140px → 110px (小さく) */
     z-index: var(--z-cpu-hand-base);
     /* ✅ pointer-events削除: 子要素で個別制御 */
     overflow: visible;
     background: transparent;
-    padding: 6px 0; /* 8px → 6px */
+    padding: 6px 0;
+    /* 8px → 6px */
     display: flex;
     justify-content: center;
     align-items: flex-end;
-    gap: clamp(2px, 0.5vw, 8px); /* 4px → 2px, 0.8vw → 0.5vw, 12px → 8px */
+    gap: clamp(2px, 0.5vw, 8px);
+    /* 4px → 2px, 0.8vw → 0.5vw, 12px → 8px */
     box-sizing: border-box;
 }
 
@@ -27,7 +31,8 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    gap: 2px; /* 4px → 2px (よりコンパクト) */
+    gap: 2px;
+    /* 4px → 2px (よりコンパクト) */
     /* ✅ 背景のみpointer-events無効、カードは有効 */
     transform: none;
     transform-style: flat;
@@ -58,13 +63,16 @@
 }
 
 #cpu-hand .hand-slot {
-    width: calc(var(--hand-card-width) * 0.7); /* 0.85 → 0.7 (さらに小さく) */
-    height: calc(var(--hand-card-height) * 0.7); /* 0.85 → 0.7 (さらに小さく) */
+    width: calc(var(--hand-card-width) * 0.7);
+    /* 0.85 → 0.7 (さらに小さく) */
+    height: calc(var(--hand-card-height) * 0.7);
+    /* 0.85 → 0.7 (さらに小さく) */
     border-radius: var(--radius-md);
     background-color: rgba(25, 25, 35, 0.95);
     border: 2px solid rgba(255, 215, 0, 0.4);
     z-index: var(--z-cpu-hand-base);
-    pointer-events: auto !important; /* ✅ 確実にクリック可能 */
+    pointer-events: auto !important;
+    /* ✅ 確実にクリック可能 */
     cursor: pointer;
     position: relative;
     flex-shrink: 0;
@@ -100,12 +108,16 @@
 /* プレイヤー手札エリア（標準的なTCG方式：画面下部） */
 #player-hand-container {
     position: fixed;
-    bottom: 80px; /* Game Footer上部 */
+    bottom: 0;
+    /* 80px -> 0 (Sit flush at bottom of screen) */
+    padding-bottom: clamp(10px, 2vh, 20px);
+    /* Internal padding for spacing */
     left: 50%;
     transform: translateX(-50%);
-    width: clamp(600px, 80vw, 1200px);
-    height: clamp(220px, 32vh, 320px);
-    max-height: 320px;
+    width: min(95%, 1200px);
+    height: clamp(160px, 32vh, 320px);
+    max-height: 35vh;
+    /* Ensure it never goes above 35% of screen height */
     display: flex;
     justify-content: center;
     align-items: flex-end;
@@ -116,15 +128,6 @@
 }
 
 /* ✅ ハイブリッド方式: DOM版手札は常に表示（Three.jsと融合）*/
-/* Three.jsモード時もDOM版手札を表示 */
-/* body.three-active #player-hand-container,
-body.three-active #player-hand {
-    pointer-events: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-    z-index: -1 !important;
-} */
-
 #player-hand-container #player-hand,
 #player-hand-container .hand-slot {
     pointer-events: auto;
@@ -150,7 +153,8 @@ body.three-active #player-hand {
 }
 
 #player-hand .hand-slot {
-    pointer-events: auto !important; /* ✅ 確実にクリック可能 */
+    pointer-events: auto !important;
+    /* ✅ 確実にクリック可能 */
     cursor: pointer !important;
     transform-style: flat !important;
     backface-visibility: visible;
@@ -159,8 +163,10 @@ body.three-active #player-hand {
     height: var(--hand-card-height);
     margin: 0;
     transition: all 0.2s ease;
-    opacity: 1; /* ✅ 確実に表示 */
-    visibility: visible; /* ✅ 確実に表示 */
+    opacity: 1;
+    /* ✅ 確実に表示 */
+    visibility: visible;
+    /* ✅ 確実に表示 */
 }
 
 #player-hand .hand-slot.active {
@@ -218,7 +224,10 @@ body.three-active #player-hand {
 }
 
 .hand-slot:hover:not(.active) {
-    transform: translateY(-6px) scale(1.04);
+    transform: translateY(-20px) scale(1.2);
+    /* ✅ 業界標準値に統一: Hearthstone/MTG Arena準拠 */
+    transition: all 250ms ease-out;
+    /* ✅ 業界標準: 250ms */
     box-shadow:
         0 8px 20px rgba(0, 0, 0, 0.35),
         0 0 15px rgba(255, 255, 255, 0.1);
@@ -251,9 +260,9 @@ body.three-active #player-hand {
     display: flex;
 }
 
-/* アニメーション準備中のカードを初期状態で非表示にする */
+/* ✅ アニメーション準備クラス（opacity: 0は削除 - アニメーションが見えなくなるため） */
 .is-preparing-animation .relative {
-    opacity: 0;
+    /* opacity: 0; ← 削除: これがアニメーションを完全に隠していた */
     transition: none;
 }
 

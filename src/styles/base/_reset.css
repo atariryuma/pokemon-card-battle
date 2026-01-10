@@ -57,7 +57,8 @@ body {
     padding: 0 var(--side-padding);
     font-family: 'Inter', 'Noto Sans JP', sans-serif;
     background: linear-gradient(135deg, #16222A 0%, #3A6073 100%);
-    overflow: hidden;
+    overflow-x: hidden;  /* ✅ 水平スクロールのみ無効化 */
+    overflow-y: auto;    /* ✅ 垂直スクロールは許可（アニメーションがクリップされない） */
     display: flex;
     flex-direction: column;
     justify-content: flex-start;

@@ -14,14 +14,13 @@
  * - エラーハンドリングの強化
  */
 
-import { animateFlow } from './animations/flow.js';
 import { animate } from './animation-manager.js';
 import { GAME_PHASES } from './phase-manager.js';
 import { cloneGameState, addLogEntry } from './state.js';
 import * as Logic from './logic.js';
 import { gameLogger } from './game-logger.js';
 import { noop } from './utils.js';
-import { ANIMATION_TIMING, SHAKE_CONFIG, MULLIGAN_CONFIG } from './constants/timing.js';
+import { ANIMATION_TIMING, SHAKE_CONFIG, MULLIGAN_CONFIG, DOM_VERIFICATION } from './constants/timing.js';
 
 // 新しいアーキテクチャのインポート
 import { gameContext } from './core/game-context.js';
@@ -66,7 +65,7 @@ export class SetupManager {
     this.orchestrator = new InitialSetupOrchestrator(context, this.placementHandler);
     this.errorHandler = new SetupErrorHandler(context);
   }
-  
+
   /**
    * ゲーム初期化とセットアップ開始
    * オーケストレーターに処理を委譲
@@ -120,7 +119,7 @@ export class SetupManager {
   async animateDeckShuffle() {
     const playerDeck = document.querySelector('.player-self .deck-container');
     const cpuDeck = document.querySelector('.opponent-board .deck-container');
-    
+
     if (playerDeck && cpuDeck) {
       // シャッフルアニメーションを同時実行
       await Promise.all([
@@ -171,20 +170,20 @@ export class SetupManager {
         newState.players.cpu.hand.push(cpuCard);
       }
     }
-    
+
     // Initial hands drawn successfully
 
     newState = addLogEntry(newState, {
       type: 'initial_draw',
       message: '両プレイヤーが初期手札を引きました。'
     });
-    
+
     // 手札配布完了後、Promise-based非同期実行でCPUの初期ポケモン配置
     if (this.debugEnabled) console.log('🤖 drawInitialHands: Starting CPU initial setup scheduling...');
     this._scheduleCPUInitialSetup().catch(error => {
       console.error('❌ Error in CPU initial setup:', error);
     });
-    
+
     // Note: アニメーションはGame.jsでview.render()の後に呼ばれる
     // ここでは状態の更新のみを行い、アニメーションは別途実行する
 
@@ -234,11 +233,10 @@ export class SetupManager {
    * ✅ DOM要素の準備を待ってから実行
    */
   async animateInitialDraw() {
-    // DOM要素の準備を待つ（最大10回、50msずつリトライ）
-    const maxAttempts = 10;
+    // ✅ DOM要素の準備を待つ（統一された定数を使用）
     let attempts = 0;
 
-    while (attempts < maxAttempts) {
+    while (attempts < DOM_VERIFICATION.MAX_ATTEMPTS) {
       const playerHand = document.getElementById('player-hand');
       const cpuHand = document.getElementById('cpu-hand');
 
@@ -248,8 +246,18 @@ export class SetupManager {
         const cpuCards = Array.from(cpuHand.querySelectorAll('.relative'));
 
         if (playerCards.length > 0 && cpuCards.length > 0) {
+          // ✅ 強制リフロー（CSSが確実に適用されるように）
+          playerHand.offsetHeight;
+          cpuHand.offsetHeight;
+
+          // ✅ CSS適用を確実にするため少し待機
+          await new Promise(resolve => setTimeout(resolve, 50));
+
           // ✅ フリップアニメーション有効化（Hearthstone/MTG Arena風）
           await animate.handDeal(playerCards, 'player', { withFlip: true });
+
+          // ✅ アニメーションをずらして視認しやすく
+          await new Promise(resolve => setTimeout(resolve, 200));
 
           // ✅ CPU側もフリップアニメーション
           await animate.handDeal(cpuCards, 'cpu', { withFlip: true });
@@ -259,13 +267,13 @@ export class SetupManager {
         }
       }
 
-      // 50ms待機して再試行
-      await new Promise(resolve => setTimeout(resolve, 50));
+      // 統一されたリトライ間隔で待機
+      await new Promise(resolve => setTimeout(resolve, DOM_VERIFICATION.RETRY_INTERVAL));
       attempts++;
     }
 
     // タイムアウト時の警告
-    console.warn('⚠️ animateInitialDraw: DOM elements not ready after maximum attempts');
+    console.warn(`⚠️ animateInitialDraw: DOM elements not ready after ${DOM_VERIFICATION.MAX_ATTEMPTS} attempts`);
   }
 
   /**
@@ -279,7 +287,7 @@ export class SetupManager {
 
     if (playerNeedsMultigan || cpuNeedsMultigan) {
       this.mulliganCount++;
-      
+
       if (this.mulliganCount <= MULLIGAN_CONFIG.MAX_COUNT) {
         let mulliganMessage = '';
         if (playerNeedsMultigan && cpuNeedsMultigan) {
@@ -289,7 +297,7 @@ export class SetupManager {
         } else {
           mulliganMessage = `相手の手札にたねポケモンがありません。マリガンします (${this.mulliganCount}回目)`;
         }
-        
+
         newState = addLogEntry(newState, {
           type: 'mulligan',
           message: mulliganMessage
@@ -324,7 +332,7 @@ export class SetupManager {
    * たねポケモンを持っているかチェック
    */
   hasBasicPokemon(playerState) {
-    return playerState.hand.some(card => 
+    return playerState.hand.some(card =>
       card.card_type === 'Pokémon' && card.stage === 'BASIC'
     );
   }
@@ -339,7 +347,7 @@ export class SetupManager {
     // 手札をデッキに戻してシャッフル
     playerState.deck.push(...playerState.hand);
     playerState.hand = [];
-    
+
     // デッキをシャッフル
     this.shuffleArray(playerState.deck);
 
@@ -361,7 +369,7 @@ export class SetupManager {
    * マリガンアニメーション
    */
   async animateMulligan(playerId) {
-    const handElement = playerId === 'player' 
+    const handElement = playerId === 'player'
       ? document.getElementById('player-hand')
       : document.getElementById('cpu-hand');
 
@@ -370,7 +378,8 @@ export class SetupManager {
       // 新しい手札の入場のみをアニメーション
       const cards = Array.from(handElement.querySelectorAll('.relative'));
       if (cards.length > 0) {
-        await animateFlow.handEntry(cards);
+        // ✅ flow.js削除: アニメーションはanimate.handDealで対応
+        await animate.handDeal(cards, playerId);
       }
     }
   }
@@ -454,90 +463,90 @@ export class SetupManager {
     try {
       let newState = cloneGameState(state);
       const cpuState = newState.players.cpu;
-      
+
       if (this.debugEnabled) console.log(`🤖 CPU hand size: ${cpuState.hand.length}`);
-      
+
       // 基本ポケモンをフィルタリング
-      const basicPokemon = cpuState.hand.filter(card => 
+      const basicPokemon = cpuState.hand.filter(card =>
         card.card_type === 'Pokémon' && card.stage === 'BASIC'
       );
-      
+
       if (this.debugEnabled) console.log(`🤖 CPU basic Pokemon found: ${basicPokemon.length}`);
       basicPokemon.forEach(pokemon => {
         if (this.debugEnabled) console.log(`🤖 - ${pokemon.name_ja} (${pokemon.id})`);
       });
-      
+
       if (basicPokemon.length === 0) {
         console.warn('⚠️ CPU has no Basic Pokemon for setup');
         return newState;
       }
-      
+
       // 初期セットアップの場合: アクティブ + ベンチ
       if (isInitialSetup) {
         // CPUがすでにアクティブポケモンを持っている場合はスキップ
         if (newState.players.cpu.active) {
           return newState;
         }
-        
+
         // 1. アクティブポケモン配置
         const activeCandidate = basicPokemon[0];
-        
+
         newState = Logic.placeCardInActive(newState, 'cpu', activeCandidate.id);
-        
+
         if (newState.players.cpu.active) {
           newState.players.cpu.active.setupFaceDown = true;
-          
+
           // 統一アニメーション実行
-          await animate.cardMove('cpu', activeCandidate.id, 'hand->active', 
+          await animate.cardMove('cpu', activeCandidate.id, 'hand->active',
             { isSetupPhase: true, card: activeCandidate }
           );
           await new Promise(resolve => setTimeout(resolve, 800));
         }
-        
+
         // 2. ベンチポケモン配置（残りの基本ポケモン、最大5体）
-        const remainingBasic = newState.players.cpu.hand.filter(card => 
+        const remainingBasic = newState.players.cpu.hand.filter(card =>
           card.card_type === 'Pokémon' && card.stage === 'BASIC'
         );
-        
+
         let benchCount = 0;
         for (const pokemon of remainingBasic) {
           if (benchCount >= 5) break;
-          
+
           newState = Logic.placeCardOnBench(newState, 'cpu', pokemon.id, benchCount);
-          
+
           if (newState.players.cpu.bench[benchCount]) {
             newState.players.cpu.bench[benchCount].setupFaceDown = true;
-            
+
             // 統一アニメーション実行
-            await animate.cardMove('cpu', pokemon.id, 'hand->bench', 
+            await animate.cardMove('cpu', pokemon.id, 'hand->bench',
               { isSetupPhase: true, benchIndex: benchCount, card: pokemon }
             );
             benchCount++;
-            
+
             if (benchCount < remainingBasic.length && benchCount < 5) {
               await new Promise(resolve => setTimeout(resolve, 600));
             }
           }
         }
-        
+
         newState = addLogEntry(newState, {
           type: 'cpu_setup',
           message: `CPUが初期ポケモンを配置しました（バトル場: ${newState.players.cpu.active.name_ja}, ベンチ: ${benchCount}体）`
         });
-        
+
       } else {
         // ゲーム中: ベンチのみ（1体ずつ）
         const emptyBenchIndex = cpuState.bench.findIndex(slot => slot === null);
         if (emptyBenchIndex !== -1) {
           const selectedPokemon = basicPokemon[0];
-          
+
           newState = Logic.placeCardOnBench(newState, 'cpu', selectedPokemon.id, emptyBenchIndex);
-          
+
           // 統一アニメーション実行
-          await animate.cardMove('cpu', selectedPokemon.id, 'hand->bench', 
+          await animate.cardMove('cpu', selectedPokemon.id, 'hand->bench',
             { isSetupPhase: false, benchIndex: emptyBenchIndex, card: selectedPokemon }
           );
-          
+
           newState = addLogEntry(newState, {
             type: 'pokemon_played',
             player: 'cpu',
@@ -546,7 +555,7 @@ export class SetupManager {
         }
       }
       return newState;
-      
+
     } catch (error) {
       console.error('❌ Error in unified CPU setup:', error);
       return state;
@@ -594,7 +603,7 @@ export class SetupManager {
   isSetupComplete(state) {
     const playerReady = state.players.player.active !== null;
     const cpuReady = state.players.cpu.active !== null;
-    
+
     return playerReady && cpuReady;
   }
 
@@ -606,10 +615,10 @@ export class SetupManager {
     let newState = cloneGameState(state);
 
     // プレイヤーのセットアップ完了チェック
-    const playerHasActiveBasic = newState.players.player.active && 
-                                 newState.players.player.active.card_type === 'Pokémon' && 
-                                 newState.players.player.active.stage === 'BASIC';
-    
+    const playerHasActiveBasic = newState.players.player.active &&
+      newState.players.player.active.card_type === 'Pokémon' &&
+      newState.players.player.active.stage === 'BASIC';
+
     if (!playerHasActiveBasic) {
       console.warn('⚠️ Player setup not complete - no Basic Pokemon in active position');
       newState = addLogEntry(newState, {
@@ -621,11 +630,11 @@ export class SetupManager {
 
     // プレイヤー確定フラグを設定
     newState.setupSelection.confirmed = true;
-    
+
     // プレイヤー側のサイドカード配布（もし未配布の場合）
-    const playerPrizeCount = Array.isArray(newState.players?.player?.prize) ? 
+    const playerPrizeCount = Array.isArray(newState.players?.player?.prize) ?
       newState.players.player.prize.length : 0;
-    
+
     if (playerPrizeCount !== 6) {
       // console.log('🎯 Dealing player prize cards');
       newState = await this.dealPrizeCards(newState);
@@ -636,12 +645,12 @@ export class SetupManager {
     // 両者準備が完了している場合のみゲーム開始準備フェーズに移行
     const bothHaveActive = !!(newState.players?.player?.active && newState.players?.cpu?.active);
     const cpuReady = newState.cpuSetupReady === true;
-    
+
     if (bothHaveActive && cpuReady) {
       // 両者準備完了：ゲーム開始準備フェーズに移行
       newState.phase = GAME_PHASES.GAME_START_READY;
       newState.prompt.message = '両者の準備が完了しました！サイドカードを配布しています...';
-      
+
       newState = addLogEntry(newState, {
         type: 'both_setup_confirmed',
         message: '両者のセットアップが完了しました。ゲーム開始準備中...'
@@ -650,7 +659,7 @@ export class SetupManager {
       // プレイヤーのみ確定：サイドカード配布フェーズに移行
       newState.phase = GAME_PHASES.PRIZE_CARD_SETUP;
       newState.prompt.message = 'プレイヤー確定完了。サイドカードを配布しています...';
-      
+
       newState = addLogEntry(newState, {
         type: 'player_setup_confirmed',
         message: 'プレイヤーのセットアップが確定しました。CPUの準備完了を待っています...'
@@ -659,7 +668,7 @@ export class SetupManager {
 
     // 両者準備完了チェック
     this._checkBothPlayersReady();
-    
+
     return newState;
   }
 
@@ -680,7 +689,7 @@ export class SetupManager {
   async startGameRevealCards(state) {
     noop('🔥 SETUP-MANAGER: startGameRevealCards called');
     let newState = cloneGameState(state);
-    
+
     // 全てのセットアップ用裏向きフラグを削除
     if (newState.players.player.active) {
       delete newState.players.player.active.setupFaceDown;
@@ -688,7 +697,7 @@ export class SetupManager {
     if (newState.players.cpu.active) {
       delete newState.players.cpu.active.setupFaceDown;
     }
-    
+
     // ベンチのフラグも削除
     for (let i = 0; i < 5; i++) {
       if (newState.players.player.bench[i]) {
@@ -698,17 +707,17 @@ export class SetupManager {
         delete newState.players.cpu.bench[i].setupFaceDown;
       }
     }
-    
+
     // フェーズをプレイヤーターンに移行
     newState.phase = GAME_PHASES.PLAYER_TURN;
     newState.turn = 1;
     newState.turnPlayer = 'player';
-    
+
     newState = addLogEntry(newState, {
       type: 'game_start',
       message: 'バトル開始！全てのポケモンが公開されました！'
     });
-    
+
     return newState;
   }
 

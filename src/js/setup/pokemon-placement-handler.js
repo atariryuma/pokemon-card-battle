@@ -12,12 +12,16 @@
  * - テスト容易性: 純粋関数として実装
  */
 
+
 import { cloneGameState, addLogEntry } from '../state.js';
 import * as Logic from '../logic.js';
 import { SetupError, SetupErrorType } from '../errors/setup-error.js';
 import { setupStateValidator } from './setup-state-validator.js';
-import { animateFlow } from '../animations/flow.js';
+import { animate } from '../animation-manager.js';
 import { SequentialAnimator } from '../utils/sequential-animator.js';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger('PokemonPlacementHandler');
 
 /**
  * ポケモン配置ハンドラークラス
@@ -30,7 +34,6 @@ export class PokemonPlacementHandler {
     constructor(gameContext, validator = null) {
         this.gameContext = gameContext;
         this.validator = validator || setupStateValidator;
-        this.debugEnabled = false;
     }
 
     /**
@@ -130,9 +133,7 @@ export class PokemonPlacementHandler {
      */
     async placeCpuPokemon(state, isInitialSetup = true) {
         try {
-            if (this.debugEnabled) {
-                console.log(`🤖 placeCpuPokemon: Starting (isInitialSetup: ${isInitialSetup})`);
-            }
+            logger.debug(`🤖 placeCpuPokemon: Starting (isInitialSetup: ${isInitialSetup})`);
 
             let newState = cloneGameState(state);
             const cpuState = newState.players.cpu;
@@ -189,7 +190,12 @@ export class PokemonPlacementHandler {
             defaultDelay: 800,
             stopOnError: false,
             onTaskError: (task, error) => {
-                console.error(`CPU placement task ${task.id} failed:`, error);
+                logger.error(`CPU placement task ${task.id} failed:`, error);
+                throw new SetupError(
+                    SetupErrorType.UNEXPECTED_ERROR,
+                    `CPU placement task ${task.id} failed`,
+                    { originalError: error, taskId: task.id }
+                );
             }
         });
 
@@ -202,8 +208,10 @@ export class PokemonPlacementHandler {
                 newState.players.cpu.active.setupFaceDown = true;
 
                 // アニメーション実行
-                await animateFlow.handToActive('cpu', activeCandidate.id, {
-                    isSetupPhase: true
+                // ✅ flow.js削除: animate.cardMoveを使用
+                await animate.cardMove('cpu', activeCandidate.id, 'hand->active', {
+                    isSetupPhase: true,
+                    card: activeCandidate
                 });
             }
         }, { delay: 0 });
@@ -229,8 +237,11 @@ export class PokemonPlacementHandler {
                     newState = updatedState;
 
                     // アニメーション実行
-                    await animateFlow.handToBench('cpu', pokemon.id, benchIndex, {
-                        isSetupPhase: true
+                    // ✅ flow.js削除: animate.cardMoveを使用
+                    await animate.cardMove('cpu', pokemon.id, 'hand->bench', {
+                        isSetupPhase: true,
+                        benchIndex: benchIndex,
+                        card: pokemon
                     });
                 }
             }, { delay: 600 });
@@ -274,8 +285,11 @@ export class PokemonPlacementHandler {
         newState = Logic.placeCardOnBench(newState, 'cpu', selectedPokemon.id, emptyBenchIndex);
 
         // アニメーション実行
-        await animateFlow.handToBench('cpu', selectedPokemon.id, emptyBenchIndex, {
-            isSetupPhase: false
+        // ✅ flow.js削除: animate.cardMoveを使用
+        await animate.cardMove('cpu', selectedPokemon.id, 'hand->bench', {
+            isSetupPhase: false,
+            benchIndex: emptyBenchIndex,
+            card: selectedPokemon
         });
 
         newState = addLogEntry(newState, {
@@ -344,9 +358,10 @@ export class PokemonPlacementHandler {
                             await new Promise(resolve => requestAnimationFrame(resolve));
 
                             // アニメーション
-                            await animateFlow.handToActive('cpu', pokemon.id, {
+                            // ✅ flow.js削除: animate.cardMoveを使用
+                            await animate.cardMove('cpu', pokemon.id, 'hand->active', {
                                 isSetupPhase: true,
-                                initialSourceRect: beforeRect
+                                card: pokemon
                             });
                         }
                     } else {
@@ -366,9 +381,11 @@ export class PokemonPlacementHandler {
                                 await new Promise(resolve => requestAnimationFrame(resolve));
 
                                 // アニメーション
-                                await animateFlow.handToBench('cpu', pokemon.id, benchIndex, {
+                                // ✅ flow.js削除: animate.cardMoveを使用
+                                await animate.cardMove('cpu', pokemon.id, 'hand->bench', {
                                     isSetupPhase: true,
-                                    initialSourceRect: beforeRect
+                                    benchIndex: benchIndex,
+                                    card: pokemon
                                 });
                             }
                         }
@@ -408,10 +425,10 @@ export class PokemonPlacementHandler {
     }
 
     /**
-     * デバッグモードを設定
-     * @param {boolean} enabled - デバッグモード有効/無効
+     * デバッグモード設定（廃止: loggerシステムを使用）
+     * @deprecated logger経由でログレベルを制御してください
      */
     setDebugMode(enabled) {
-        this.debugEnabled = enabled;
+        logger.warn('setDebugMode is deprecated. Use logger configuration instead.');
     }
 }

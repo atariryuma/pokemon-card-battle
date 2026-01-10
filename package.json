@@ -9,10 +9,12 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "echo Open http://localhost:3000/tests/test-runner.html in your browser"
   },
   "dependencies": {
     "sharp": "^0.34.3",
-    "three": "^0.182.0"
+    "three": "^0.182.0",
+    "gsap": "^3.12.5"
   }
 }

@@ -276,4 +276,160 @@ style: Code formatting (no logic change)
 
 ---
 
+## 📋 完全要件定義書 v3.0 (2026-01-04更新)
+
+### 現在のアーキテクチャステータス
+
+**ハイブリッド3D/2Dアーキテクチャ採用済み**:
+- **手札**: DOM/CSS (業界標準TCG方式: Hearthstone, MTG Arena準拠)
+- **バトル場**: Three.js (3D演出)
+
+### 必須要件チェックリスト
+
+#### ✅ AR-001: レンダリング分離
+- [ ] **手札はDOM/CSSでレンダリング** (`view.js:_renderHand()`)
+- [ ] **Three.js手札レンダリングは完全無効** (`three-view-bridge.js:_clearHand()`)
+- [ ] **ボードはThree.jsでレンダリング** (active, bench, deck, discard, prize)
+- [ ] **重複レンダリングなし** (DOM版とThree.js版が競合しない)
+
+検証方法:
+```javascript
+// コンソールで確認
+document.querySelectorAll('#player-hand .hand-slot').length  // → 7
+document.querySelectorAll('#cpu-hand .hand-slot').length     // → 7
+```
+
+#### ✅ AR-002: カード配布アニメーション
+- [ ] **フリップアニメーション実行** (`card-moves.js:dealHand()`)
+- [ ] **DOM要素準備確認** (`setup-manager.js:animateInitialDraw()` - 最大10回リトライ)
+- [ ] **animate import確認** (`setup-manager.js` line 18)
+- [ ] **クリーンアップ実行** (opacity: 1, transform: none, visibility: visible)
+
+実装ファイル:
+- `src/js/setup-manager.js` - `dealInitialHands()`, `animateInitialDraw()`
+- `src/js/animations/card-moves.js` - `dealHand()`
+- `src/js/animation-manager.js` - `handDeal()`
+
+#### ✅ AR-003: 手札ホバーエフェクト
+- [ ] **スケール1.2倍** (20%拡大、業界標準)
+- [ ] **リフト20px** (上昇)
+- [ ] **トランジション250ms** (ease-out)
+- [ ] **Mac Dockエフェクト初期化** (`view.js:_initHandDock()`)
+- [ ] **呼吸アニメーション停止** (ホバー時)
+
+実装ファイル:
+- `src/js/view.js` - `_initHandDock()`
+- `src/styles/layout/_hand-area.css` - `.hand-slot:hover`
+- `src/js/three/card.js` - `setHovered()`
+
+#### ✅ AR-004: 手札クリック可能性
+- [ ] **pointer-events: auto !important** (全手札スロット)
+- [ ] **cursor: pointer !important** (視覚的フィードバック)
+- [ ] **親要素のpointer-events無効化** (#player-hand-container, #cpu-hand-container)
+- [ ] **クリックイベントリスナー登録** (`view.js:_attachHandEventListeners()`)
+
+実装ファイル:
+- `src/styles/layout/_hand-area.css` - lines 75-76, 156-157
+- `src/js/view.js` - `_attachHandEventListeners()`, `_handleHandCardClick()`
+
+#### ✅ AR-005: サイドカードシステム
+- [ ] **プレイヤー選択機能** (`game.js:_handlePrizeSelection()`)
+- [ ] **CPU自動選択機能** (`game.js:_handleCpuPrizeSelection()`)
+- [ ] **アニメーション実行** (`game.js:_animatePrizeTake()`, `three/card.js:animatePrizeTake()`)
+- [ ] **金色グローエフェクト** (0xfcd34d, 400ms)
+- [ ] **勝利条件判定** (`logic.js:checkForWinner()`)
+
+実装ファイル:
+- `src/js/logic.js` - `handlePokemonKnockout()`, `takePrizeCard()`
+- `src/js/game.js` - `_handlePrizeSelection()`, `_handleCpuPrizeSelection()`, `_animatePrizeTake()`
+- `src/js/three/card.js` - `animatePrizeTake()`
+
+### 検証手順
+
+#### Phase 1: 初期表示
+1. ブラウザリロード
+2. コンソール確認: `✅ Three.js Scene initialized`, `✅ GameContext initialized`
+3. 「手札を7枚引く」ボタン表示確認
+
+#### Phase 2: カード配布
+1. ボタンクリック
+2. フリップアニメーション確認（回転 + フェード）
+3. プレイヤー手札7枚表示（画面下部）
+4. CPU手札7枚表示（画面上部、小さめ）
+5. コンソール確認: `✅ Initial hand draw animation completed`
+
+#### Phase 3: ホバーエフェクト
+1. 手札カードにマウスオーバー
+2. カード拡大確認（1.2倍、明確に視認可能）
+3. カード上昇確認（20px）
+4. 近接カード影響確認（Mac Dockエフェクト）
+5. カーソル変化確認（pointer）
+
+#### Phase 4: クリック
+1. 手札カードクリック
+2. クリックイベント発火確認
+3. カード選択状態確認
+4. コンソール確認: クリックログ表示
+
+#### Phase 5: ゲーム進行
+1. たねポケモン配置
+2. セットアップ完了
+3. ドローフェーズ移行
+4. メインフェーズ移行
+
+### 既知の問題と対策
+
+#### 問題1: カードが表示されない
+**原因**: DOM要素のタイミング問題
+**対策**: `_verifyDOMElements()` で最大20回リトライ (50ms間隔)
+
+#### 問題2: アニメーションが動作しない
+**原因**: `animate` import欠如
+**対策**: `setup-manager.js` line 18 で import確認
+
+#### 問題3: カードがクリックできない
+**原因**: pointer-events継承問題
+**対策**: `pointer-events: auto !important` で強制有効化
+
+#### 問題4: ホバーエフェクトが見えない
+**原因**: エフェクトが小さすぎる
+**対策**: 業界標準値採用（1.2倍, 20px, 250ms）
+
+### 重要な実装パターン
+
+#### DOM要素準備確認パターン
+```javascript
+const maxAttempts = 10;
+let attempts = 0;
+while (attempts < maxAttempts) {
+    const element = document.getElementById('target');
+    if (element) break;
+    await new Promise(resolve => setTimeout(resolve, 50));
+    attempts++;
+}
+```
+
+#### アニメーションクリーンアップパターン
+```javascript
+await animate();
+// ✅ 確実に表示させるクリーンアップ
+element.style.opacity = '1';
+element.style.visibility = 'visible';
+element.style.display = 'flex';
+element.style.transform = 'none';
+element.classList.remove('is-preparing-animation');
+```
+
+#### Three.js無効化パターン
+```javascript
+// hand rendering無効化
+if (this.view?.threeViewBridge) {
+    this.view.threeViewBridge._clearHand();
+}
+// hand interaction無効化
+this.gameBoard3D.disableHandInteraction();
+```
+
+---
+
 **Note**: This file serves as project memory for Claude Code. Keep it concise and focused on project-specific information. Update iteratively as patterns emerge.

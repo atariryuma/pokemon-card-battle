@@ -1,5 +1,6 @@
 import { GAME_PHASES } from './phase-manager.js';
 import { addLogEntry, updateTurnState } from './state.js';
+import { gameOverHandler } from './game-over-handler.js';
 
 // ==========================================
 // 手札制限システム（10枚上限）
@@ -155,31 +156,31 @@ export function placeCardOnBench(state, player, cardId, benchIndex) {
 export function drawCard(state, player) {
     const playerState = state.players[player];
 
-    // デッキ枚数チェック
-    if (playerState.deck.length === 0) {
-        let newState = {
+    // ✅ FIX #8 + Lint Fix (b2959a8c, f18f544b): 手札制限チェックの統合 + 変数再宣言エラー修正
+    if (!canDrawCard(state, player)) {
+        console.warn(`❌ ${player} cannot draw: Hand limit (${HAND_LIMIT}) reached`);
+        // 手札制限に達した場合はログに記録
+        return addLogEntry(state, {
+            message: `${player === 'player' ? 'あなた' : '相手'}の手札が上限に達しているため、ドローできませんでした。`
+        });
+    }
+
+    if (!playerState.deck || playerState.deck.length === 0) {
+        console.warn(`❌ ${player} tried to draw from an empty deck`);
+        const deckOutState = {
             ...state,
             phase: GAME_PHASES.GAME_OVER,
             winner: player === 'player' ? 'cpu' : 'player',
             gameEndReason: 'deck_out',
         };
-        newState = addLogEntry(newState, { message: `${player === 'player' ? 'あなた' : '相手'}の山札がなくなった！` });
-        return newState;
-    }
-
-    // 手札上限チェック（HAND_LIMIT = 10枚）
-    if (!canDrawCard(state, player)) {
-        let newState = addLogEntry(state, {
-            message: `${player === 'player' ? 'あなた' : '相手'}の手札が上限（${HAND_LIMIT}枚）に達しているため、ドローできません。`
-        });
-        return newState;
+        return addLogEntry(deckOutState, { message: `${player === 'player' ? 'あなた' : '相手'}の山札がなくなった！` });
     }
 
     const newDeck = [...playerState.deck];
     const drawnCard = newDeck.shift(); // Take the top card
     const newHand = [...playerState.hand, drawnCard];
 
-    let newState = {
+    let updatedState = {
         ...state,
         players: {
             ...state.players,
@@ -192,9 +193,9 @@ export function drawCard(state, player) {
     };
 
     // turnStateを更新してドロー済みフラグを立てる
-    newState = updateTurnState(newState, { hasDrawn: true });
-    newState = addLogEntry(newState, { message: `${player === 'player' ? 'あなた' : '相手'}はカードを1枚引いた。` });
-    return newState;
+    updatedState = updateTurnState(updatedState, { hasDrawn: true });
+    updatedState = addLogEntry(updatedState, { message: `${player === 'player' ? 'あなた' : '相手'}はカードを1枚引いた。` });
+    return updatedState;
 }
 
 /**
@@ -303,70 +304,70 @@ export function attachEnergy(state, player, energyId, pokemonId) {
  * @returns {object} The new game state.
  */
 export function evolvePokemon(state, player, evolutionCardId, targetPokemonId) {
-  const playerState = state.players[player];
-  const evolutionCardInfo = findCardInHand(playerState, evolutionCardId);
-  if (!evolutionCardInfo) return state; // Evolution card not in hand
+    const playerState = state.players[player];
+    const evolutionCardInfo = findCardInHand(playerState, evolutionCardId);
+    if (!evolutionCardInfo) return state; // Evolution card not in hand
 
-  const targetPokemonInfo = findPokemonById(playerState, targetPokemonId);
-  if (!targetPokemonInfo) return state; // Target pokemon not on board
+    const targetPokemonInfo = findPokemonById(playerState, targetPokemonId);
+    if (!targetPokemonInfo) return state; // Target pokemon not on board
 
-  const { card: evolutionCard, index: handIndex } = evolutionCardInfo;
-  const { pokemon: targetPokemon, zone, index: boardIndex } = targetPokemonInfo;
+    const { card: evolutionCard, index: handIndex } = evolutionCardInfo;
+    const { pokemon: targetPokemon, zone, index: boardIndex } = targetPokemonInfo;
 
-  // --- Evolution validation ---
-  // 1. Check if the evolution card's 'evolves_from' matches the target's name
-  if (evolutionCard.evolves_from !== targetPokemon.name_en) {
-    console.warn(`Evolution failed: ${evolutionCard.name_en} does not evolve from ${targetPokemon.name_en}`);
-    return state;
-  }
+    // --- Evolution validation ---
+    // 1. Check if the evolution card's 'evolves_from' matches the target's name
+    if (evolutionCard.evolves_from !== targetPokemon.name_en) {
+        console.warn(`Evolution failed: ${evolutionCard.name_en} does not evolve from ${targetPokemon.name_en}`);
+        return state;
+    }
 
-  // 2. Check if the target pokemon was played this turn
-  if (targetPokemon.turnPlayed === state.turn) {
-    console.warn(`Evolution failed: Cannot evolve a Pokémon that was played this turn.`);
-    return state;
-  }
-  
-  // 3. Check first turn rule (no evolutions on the first turn of the game for either player)
-  if (state.turn === 1) {
-      console.warn(`Evolution failed: Cannot evolve on the first turn of the game.`);
-      return state;
-  }
+    // 2. Check if the target pokemon was played this turn
+    if (targetPokemon.turnPlayed === state.turn) {
+        console.warn(`Evolution failed: Cannot evolve a Pokémon that was played this turn.`);
+        return state;
+    }
 
-  // --- Perform evolution ---
-  const newHand = [...playerState.hand];
-  newHand.splice(handIndex, 1);
+    // 3. Check first turn rule (no evolutions on the first turn of the game for either player)
+    if (state.turn === 1) {
+        console.warn(`Evolution failed: Cannot evolve on the first turn of the game.`);
+        return state;
+    }
 
-  const evolvedPokemon = {
-    ...evolutionCard,
-    damage: targetPokemon.damage || 0,
-    attached_energy: [...(targetPokemon.attached_energy || [])],
-    turnPlayed: targetPokemon.turnPlayed, // Keep original turn played
-  };
+    // --- Perform evolution ---
+    const newHand = [...playerState.hand];
+    newHand.splice(handIndex, 1);
 
-  let newActive = playerState.active;
-  let newBench = [...playerState.bench];
+    const evolvedPokemon = {
+        ...evolutionCard,
+        damage: targetPokemon.damage || 0,
+        attached_energy: [...(targetPokemon.attached_energy || [])],
+        turnPlayed: targetPokemon.turnPlayed, // Keep original turn played
+    };
 
-  if (zone === 'active') {
-    newActive = evolvedPokemon;
-  } else {
-    newBench[boardIndex] = evolvedPokemon;
-  }
+    let newActive = playerState.active;
+    let newBench = [...playerState.bench];
 
-  let newState = {
-    ...state,
-    players: {
-      ...state.players,
-      [player]: {
-        ...playerState,
-        hand: newHand,
-        active: newActive,
-        bench: newBench,
-      },
-    },
-  };
+    if (zone === 'active') {
+        newActive = evolvedPokemon;
+    } else {
+        newBench[boardIndex] = evolvedPokemon;
+    }
 
-  newState = addLogEntry(newState, { message: `${player === 'player' ? 'あなた' : '相手'}は${targetPokemon.name_ja}を${evolutionCard.name_ja}に進化させた！` });
-  return newState;
+    let newState = {
+        ...state,
+        players: {
+            ...state.players,
+            [player]: {
+                ...playerState,
+                hand: newHand,
+                active: newActive,
+                bench: newBench,
+            },
+        },
+    };
+
+    newState = addLogEntry(newState, { message: `${player === 'player' ? 'あなた' : '相手'}は${targetPokemon.name_ja}を${evolutionCard.name_ja}に進化させた！` });
+    return newState;
 }
 
 /**
@@ -478,7 +479,7 @@ export function performAttack(state, attackingPlayerId, attackIndex) {
 
     // --- Damage Calculation ---
     let baseDamage = attack.damage || 0;
-    
+
     // 弱点計算
     if (defender.weakness && attacker.types) {
         let weakness = null;
@@ -489,11 +490,11 @@ export function performAttack(state, attackingPlayerId, attackIndex) {
             }
         } else if (Array.isArray(defender.weakness)) {
             // weakness is an array (fallback)
-            weakness = defender.weakness.find(w => 
+            weakness = defender.weakness.find(w =>
                 attacker.types.includes(w.type)
             );
         }
-        
+
         if (weakness) {
             if (weakness.value === '×2') {
                 baseDamage *= 2;
@@ -502,7 +503,7 @@ export function performAttack(state, attackingPlayerId, attackIndex) {
             }
         }
     }
-    
+
     // 抵抗力計算
     if (defender.resistance && attacker.types) {
         let resistance = null;
@@ -513,17 +514,17 @@ export function performAttack(state, attackingPlayerId, attackIndex) {
             }
         } else if (Array.isArray(defender.resistance)) {
             // resistance is an array (fallback)
-            resistance = defender.resistance.find(r => 
+            resistance = defender.resistance.find(r =>
                 attacker.types.includes(r.type)
             );
         }
-        
+
         if (resistance) {
             const resistValue = parseInt(resistance.value) || -20;
             baseDamage = Math.max(0, baseDamage + resistValue);
         }
     }
-    
+
     const finalDamage = Math.max(0, baseDamage);
     const previousDamage = defender.damage || 0;
     const newDamage = previousDamage + finalDamage;
@@ -535,7 +536,7 @@ export function performAttack(state, attackingPlayerId, attackIndex) {
     } else if (finalDamage < (attack.damage || 0)) {
         damageMessage += ' (抵抗力)';
     }
-    
+
     let newState = addLogEntry(state, { message: damageMessage });
 
     const updatedDefender = {
@@ -648,10 +649,10 @@ export function checkForKnockout(state, defendingPlayerId) {
         prizeCount
     };
 
-    newState = addLogEntry(newState, { 
-        message: `${attackingPlayerId === 'player' ? 'あなた' : '相手'}はサイドを${prizeCount}枚とることができます！` 
+    newState = addLogEntry(newState, {
+        message: `${attackingPlayerId === 'player' ? 'あなた' : '相手'}はサイドを${prizeCount}枚とることができます！`
     });
-    
+
     return newState;
 }
 
@@ -688,6 +689,8 @@ export function takePrizeCard(state, player, prizeIndex) {
     };
 }
 
+
+
 /**
  * Checks for all win conditions.
  * @param {object} state - The current game state.
@@ -696,30 +699,56 @@ export function takePrizeCard(state, player, prizeIndex) {
 export function checkForWinner(state) {
     let newState = state; // Start with current state
 
+    let winner = null;
+    let endReason = null;
+    let logMessage = '';
+
     // Check prize card condition
     if (state.players.player.prizeRemaining <= 0) {
-        newState = addLogEntry(newState, { message: '🏆 あなたの勝利！サイドを全て取りきった！' });
-        return { ...newState, phase: GAME_PHASES.GAME_OVER, winner: 'player', gameEndReason: 'prizes' };
+        logMessage = '🏆 あなたの勝利！サイドを全て取りきった！';
+        winner = 'player';
+        endReason = 'Opponent ran out of Prize Cards!';
     }
-    if (state.players.cpu.prizeRemaining <= 0) {
-        newState = addLogEntry(newState, { message: '🏆 相手の勝利！サイドを全て取りきった！' });
-        return { ...newState, phase: GAME_PHASES.GAME_OVER, winner: 'cpu', gameEndReason: 'prizes' };
+    else if (state.players.cpu.prizeRemaining <= 0) {
+        logMessage = '🏆 相手の勝利！サイドを全て取りきった！';
+        winner = 'cpu';
+        endReason = 'You ran out of Prize Cards!';
     }
 
     // Check if a player has no pokemon left in play (active or bench)
-    const isPlayerOutOfPokemon = !state.players.player.active && state.players.player.bench.every(p => p === null);
-    const isCpuOutOfPokemon = !state.players.cpu.active && state.players.cpu.bench.every(p => p === null);
+    if (!winner) {
+        const isPlayerOutOfPokemon = !state.players.player.active && state.players.player.bench.every(p => p === null);
+        const isCpuOutOfPokemon = !state.players.cpu.active && state.players.cpu.bench.every(p => p === null);
 
-    if (isPlayerOutOfPokemon) {
-        newState = addLogEntry(newState, { message: '🏆 相手の勝利！あなたがポケモンを出せなくなった！' });
-        return { ...newState, phase: GAME_PHASES.GAME_OVER, winner: 'cpu', gameEndReason: 'no_pokemon' };
-    }
-    if (isCpuOutOfPokemon) {
-        newState = addLogEntry(newState, { message: '🏆 あなたの勝利！相手がポケモンを出せなくなった！' });
-        return { ...newState, phase: GAME_PHASES.GAME_OVER, winner: 'player', gameEndReason: 'no_pokemon' };
+        if (isPlayerOutOfPokemon) {
+            logMessage = '🏆 相手の勝利！あなたがポケモンを出せなくなった！';
+            winner = 'cpu';
+            endReason = 'You have no Pokemon left in play!';
+        }
+        else if (isCpuOutOfPokemon) {
+            logMessage = '🏆 あなたの勝利！相手がポケモンを出せなくなった！';
+            winner = 'player';
+            endReason = 'Opponent has no Pokemon left in play!';
+        }
     }
 
-    // No winner yet, no log needed for simplicity
+    // Check Deck Out
+    if (!winner) {
+        if (state.players.player.deck.length === 0 && state.players.player.hand.length > 0 && newState.phase === GAME_PHASES.PLAYER_DRAW) {
+            // Logic.drawCard handles deck out check, but this is a double check during validation
+            // Note: Detailed deck out handling usually happens when attempting to draw
+        }
+    }
+
+    if (winner) {
+        newState = addLogEntry(newState, { message: logMessage });
+
+        // Show Game Over Screen
+        gameOverHandler.show(winner === 'player', endReason);
+
+        return { ...newState, phase: GAME_PHASES.GAME_OVER, winner: winner, gameEndReason: endReason };
+    }
+
     return newState;
 }
 
@@ -747,7 +776,7 @@ export function processNewActiveAfterKnockout(state) {
     newState.phase = GAME_PHASES.AWAITING_NEW_ACTIVE;
     newState.playerToAct = defendingPlayerId;
     newState.prompt = {
-        message: defendingPlayerId === 'player' 
+        message: defendingPlayerId === 'player'
             ? 'あなたのバトルポケモンがきぜつしました。ベンチから新しいポケモンを選んでください。'
             : 'CPUが新しいバトルポケモンを選んでいます...'
     };
@@ -785,7 +814,7 @@ export function clearKnockoutContext(state) {
 export function cpuAutoSelectNewActive(state) {
     const cpuState = state.players.cpu;
     const availableBench = cpuState.bench.filter(p => p !== null);
-    
+
     if (availableBench.length === 0) {
         // No pokemon available, game over
         return checkForWinner(state);
@@ -811,13 +840,13 @@ export function cpuAutoSelectNewActive(state) {
         playerToAct: null
     };
 
-    newState = addLogEntry(newState, { 
-        message: `相手は${newActive.name_ja}をバトル場に出しました。` 
+    newState = addLogEntry(newState, {
+        message: `相手は${newActive.name_ja}をバトル場に出しました。`
     });
 
     // Check for winner after new active selection
     newState = checkForWinner(newState);
-    
+
     return newState;
 }
 

@@ -63,8 +63,6 @@ export class Playmat {
             };
 
             this.scene.add(this.mesh);
-
-            console.log('🎴 Playmat created');
         } catch (error) {
             console.error('❌ Failed to load playmat texture:', error);
             // フォールバック：単色プレイマット

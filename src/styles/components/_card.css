@@ -255,7 +255,8 @@
     text-align: center;
     padding: var(--spacing-xs);
     box-sizing: border-box;
-    pointer-events: auto;
+    pointer-events: auto !important;  /* ✅ 確実にクリック可能 */
+    cursor: pointer !important;  /* ✅ カーソル表示 */
     position: relative;
     z-index: var(--z-placeholder);
     transform-origin: center center;

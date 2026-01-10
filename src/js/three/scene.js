@@ -8,6 +8,9 @@
  */
 
 import * as THREE from 'three';
+import ParticleManager from './particle-manager.js';
+import { CameraDirector } from './camera-director.js';
+import { PerformanceMonitor } from './performance-monitor.js';
 
 export class ThreeScene {
     constructor(container) {
@@ -17,16 +20,21 @@ export class ThreeScene {
         this.renderer = null;
         this.animationId = null;
 
+        // 新システム
+        this.particleManager = null;
+        this.cameraDirector = null;
+        this.performanceMonitor = new PerformanceMonitor();
+
         // 設定値 - カードゲーム俯瞰ビュー
         // ベストプラクティス: FOV 35-45度、プレイヤー側60%:相手側40%の比率
         // 参考: https://www.osd.net/blog/web-development/3d-board-game-in-a-browser-using-webgl-and-three-js-part-1/
         // 参考: https://gdkeys.com/the-card-games-ui-design-of-fairtravel-battle/
         this.config = {
-            cameraAngle: 45,        // 度（45度 - 斜め上から見下ろす）
-            cameraDistance: 800,    // カメラ距離
-            cameraOffsetZ: 80,      // プレイマットを奥に
-            playmatSize: 679,       // プレイマットサイズ
-            fov: 50,                // 視野角（50度）
+            cameraAngle: 40,        // 45 -> 40 (Slightly shallower angle to flatten the board perspective)
+            cameraDistance: 820,    // 800 -> 820
+            cameraOffsetZ: -180,    // 80 -> -180 (Negative shifts lookAt point "down" the board, moving board "up" in viewport)
+            playmatSize: 679,
+            fov: 48,                // 50 -> 48
         };
 
         this._init();
@@ -42,7 +50,11 @@ export class ThreeScene {
         this._createLighting();
         this._handleResize();
 
-        console.log('🎮 Three.js Scene initialized');
+        // 新システムを初期化
+        this.particleManager = new ParticleManager(this.scene);
+        this.cameraDirector = new CameraDirector(this.camera, this.scene);
+
+        console.log('✨ Three.js Scene initialized with advanced effects');
     }
 
     /**
@@ -124,19 +136,31 @@ export class ThreeScene {
     }
 
     /**
-     * レンダラー作成
+     * レンダラー作成（最適化済み）
      */
     _createRenderer() {
+        // 最適化されたレンダラー設定
         this.renderer = new THREE.WebGLRenderer({
-            antialias: true,
-            alpha: true,  // 透明背景
+            antialias: window.devicePixelRatio < 2, // 高DPRではアンチエイリアスOFF
+            alpha: false, // 背景透過不要（パフォーマンス向上）
+            powerPreference: 'high-performance', // GPU優先
+            stencil: false, // ステンシルバッファ不要
+            depth: true,
+            logarithmicDepthBuffer: false // 不要ならOFF
         });
 
         this.renderer.setSize(
             this.container.clientWidth,
             this.container.clientHeight
         );
+
+        // DPR制限（2以上は不要、メモリとパフォーマンスのバランス）
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        // シャドウ設定最適化
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.shadowMap.autoUpdate = false; // 静的シャドウ（手動更新）
 
         // DOM に追加
         this.renderer.domElement.style.position = 'absolute';
@@ -146,6 +170,8 @@ export class ThreeScene {
         this.renderer.domElement.id = 'three-canvas';
 
         this.container.appendChild(this.renderer.domElement);
+
+        console.log('✅ Renderer optimized: DPR=' + this.renderer.getPixelRatio());
     }
 
     /**
@@ -207,12 +233,32 @@ export class ThreeScene {
      */
     start() {
         const startTime = performance.now();
+        let lastTime = startTime;
 
         const animate = () => {
             this.animationId = requestAnimationFrame(animate);
 
+            const currentTime = performance.now();
+            const deltaTime = (currentTime - lastTime) / 1000; // 秒単位
+            lastTime = currentTime;
+
             // 経過時間（秒）
-            const time = (performance.now() - startTime) / 1000;
+            const time = (currentTime - startTime) / 1000;
+
+            // パーティクルシステム更新
+            if (this.particleManager) {
+                this.particleManager.update(deltaTime, this.camera);
+            }
+
+            // カメラディレクター更新
+            if (this.cameraDirector) {
+                this.cameraDirector.update();
+            }
+
+            // パフォーマンスモニター更新
+            if (this.performanceMonitor) {
+                this.performanceMonitor.update(this.renderer);
+            }
 
             // 更新コールバックを呼び出し
             if (this.updateCallback) {
@@ -222,7 +268,6 @@ export class ThreeScene {
             this.renderer.render(this.scene, this.camera);
         };
         animate();
-        console.log('🎬 Three.js animation loop started');
     }
 
     /**
@@ -240,6 +285,14 @@ export class ThreeScene {
      */
     dispose() {
         this.stop();
+
+        // 新システムのクリーンアップ
+        if (this.particleManager) {
+            this.particleManager.dispose();
+        }
+        if (this.cameraDirector) {
+            this.cameraDirector.dispose();
+        }
 
         // シーン内のすべてのオブジェクトを破棄
         this.scene.traverse((object) => {
@@ -276,6 +329,19 @@ export class ThreeScene {
 
     getCanvas() {
         return this.renderer.domElement;
+    }
+
+    // 新システムへのアクセサ
+    getParticleManager() {
+        return this.particleManager;
+    }
+
+    getCameraDirector() {
+        return this.cameraDirector;
+    }
+
+    getPerformanceMonitor() {
+        return this.performanceMonitor;
     }
 }
 

@@ -86,7 +86,8 @@ export class InteractionHandler {
      */
     _getIntersects() {
         this.raycaster.setFromCamera(this.mouse, this.camera);
-        return this.raycaster.intersectObjects(this.interactiveObjects, true);
+        // ✅ recursive=falseに変更: 登録オブジェクトは直接メッシュなので子階層を辿る必要がない
+        return this.raycaster.intersectObjects(this.interactiveObjects, false);
     }
 
 
@@ -94,9 +95,17 @@ export class InteractionHandler {
      * クリックハンドラ
      */
     _handleClick(event) {
+        // ✅ デバッグ: クリックイベント検出
+        console.log('🖱️ Three.js Click:', {
+            target: event.target.tagName,
+            canvas: this.canvas.tagName,
+            isCanvas: event.target === this.canvas
+        });
+
         // デバウンス処理: 短時間での重複クリックを防止
         const now = Date.now();
         if (now - this.lastClickTime < this.clickDebounceTime) {
+            console.log('⏱️ Click debounced');
             return;
         }
         this.lastClickTime = now;
@@ -104,9 +113,41 @@ export class InteractionHandler {
         this._normalizeMousePosition(event);
         const intersects = this._getIntersects();
 
+        // ✅ 詳細デバッグ: 登録されているオブジェクトの情報
+        console.log('🎯 Raycaster intersects:', {
+            count: intersects.length,
+            interactiveObjectsCount: this.interactiveObjects.length,
+            mouse: { x: this.mouse.x.toFixed(2), y: this.mouse.y.toFixed(2) }
+        });
+
+        // ✅ 追加デバッグ: 登録されているオブジェクトの詳細をログ
+        if (this.interactiveObjects.length > 0 && intersects.length === 0) {
+            console.log('🔍 Interactive objects registered:');
+            this.interactiveObjects.slice(0, 5).forEach((obj, i) => {
+                console.log(`  [${i}] type=${obj.userData?.type}, zone=${obj.userData?.zone}, owner=${obj.userData?.owner}, pos=(${obj.position?.x?.toFixed(1)}, ${obj.position?.y?.toFixed(1)}, ${obj.position?.z?.toFixed(1)}), visible=${obj.visible}`);
+            });
+            if (this.interactiveObjects.length > 5) {
+                console.log(`  ... and ${this.interactiveObjects.length - 5} more`);
+            }
+            // カメラとレイの情報
+            console.log('📷 Camera:', {
+                pos: `(${this.camera.position.x.toFixed(1)}, ${this.camera.position.y.toFixed(1)}, ${this.camera.position.z.toFixed(1)})`,
+                type: this.camera.type
+            });
+            console.log('🔦 Ray origin:', this.raycaster.ray.origin);
+            console.log('🔦 Ray direction:', this.raycaster.ray.direction);
+        }
+
         if (intersects.length > 0) {
             const firstHit = intersects[0];
             const object = this._findInteractiveParent(firstHit.object);
+
+            console.log('✅ Hit object:', {
+                type: object?.userData?.type,
+                zone: object?.userData?.zone,
+                owner: object?.userData?.owner,
+                distance: firstHit.distance.toFixed(2)
+            });
 
             if (object && this.onClickCallback) {
                 const userData = object.userData || {};
@@ -117,6 +158,8 @@ export class InteractionHandler {
                     event
                 });
             }
+        } else {
+            console.log('❌ No intersects found');
         }
     }
 
@@ -134,6 +177,7 @@ export class InteractionHandler {
             if (object !== this.hoveredObject) {
                 // 前のオブジェクトからホバー解除
                 if (this.hoveredObject && this.onHoverCallback) {
+                    console.log('👋 Hover leave:', this.hoveredObject.userData?.type);
                     this.onHoverCallback({
                         object: this.hoveredObject,
                         isHovered: false,
@@ -144,6 +188,7 @@ export class InteractionHandler {
                 // 新しいオブジェクトにホバー
                 this.hoveredObject = object;
                 if (object && this.onHoverCallback) {
+                    console.log('👉 Hover enter:', object.userData);
                     this.onHoverCallback({
                         object,
                         isHovered: true,
@@ -154,6 +199,7 @@ export class InteractionHandler {
         } else {
             // 何もホバーしていない
             if (this.hoveredObject && this.onHoverCallback) {
+                console.log('🚪 Hover exit (no object)');
                 this.onHoverCallback({
                     object: this.hoveredObject,
                     isHovered: false,

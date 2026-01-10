@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokemon Card Battle - Automated Test Runner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+        }
+
+        .test-btn {
+            @apply bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2 w-full text-left transition text-sm;
+        }
+
+        .test-btn:disabled {
+            @apply opacity-50 cursor-not-allowed;
+        }
+
+        iframe {
+            border: 2px solid #333;
+            background: #000;
+        }
+    </style>
+</head>
+
+<body class="h-screen flex flex-col">
+    <header class="bg-gray-900 p-4 border-b border-gray-700 flex justify-between items-center h-16 shrink-0">
+        <h1 class="text-xl font-bold flex items-center">
+            <span class="text-yellow-400 mr-2">⚡</span>
+            Test Runner
+        </h1>
+        <div>
+            <button id="run-all-btn"
+                class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-6 rounded text-sm uppercase tracking-wide">
+                ▶ Run All Tests
+            </button>
+            <button id="run-detector-btn"
+                class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded text-sm ml-2">
+                🐛 Bug Detector
+            </button>
+            <button onclick="location.reload()"
+                class="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded text-sm ml-2">
+                ↻ Reload
+            </button>
+        </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+        <!-- Sidebar -->
+        <div class="w-64 bg-gray-800 p-4 overflow-y-auto border-r border-gray-700 shrink-0">
+            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4">Individual Tests</h3>
+            <div id="test-buttons">
+                <!-- Buttons injected by script -->
+            </div>
+
+            <div class="mt-8">
+                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Instructions</h3>
+                <p class="text-xs text-gray-400 mb-2">
+                    Open DevTools console to see detailed logs.
+                </p>
+                <p class="text-xs text-gray-400">
+                    The game is running in isolation within the iframe. Tests are injected directly into its context.
+                </p>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 flex flex-col min-w-0">
+            <!-- Results Panel -->
+            <div id="test-results"
+                class="h-1/3 bg-gray-900 p-4 overflow-y-auto border-b border-gray-700 font-mono text-sm">
+                <div class="text-gray-500 italic">Ready to run tests...</div>
+            </div>
+
+            <!-- Game View (Iframe) -->
+            <div class="flex-1 relative bg-black">
+                <div class="absolute top-0 left-0 p-2 bg-black/50 text-white text-xs z-10 pointer-events-none">Game
+                    Instance Preview</div>
+                <iframe id="game-frame" src="/" class="w-full h-full"></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const TEST_FUNCTIONS = [
+            { name: 'Card Flip', id: 'testCardFlip' },
+            { name: 'Damage Badge', id: 'testDamageBadge' },
+            { name: 'Game Flow', id: 'testGameFlow' },
+            { name: 'Energy Mechanics', id: 'testEnergyMechanics' },
+            { name: 'Battle Mechanics', id: 'testBattleMechanics' },
+            { name: 'Bench & Retreat', id: 'testBenchRetreat' },
+            { name: 'Evolution', id: 'testEvolution' },
+            { name: 'Trainer Effects', id: 'testTrainerEffects' },
+            { name: 'Three/DOM Sync', id: 'testThreeDOMSync' },
+            { name: 'Performance', id: 'testPerformance' },
+        ];
+
+        const frame = document.getElementById('game-frame');
+        const resultsContainer = document.getElementById('test-results');
+        const runAllBtn = document.getElementById('run-all-btn');
+        const runDetectorBtn = document.getElementById('run-detector-btn');
+        const buttonsContainer = document.getElementById('test-buttons');
+
+        // Initialize UI
+        TEST_FUNCTIONS.forEach(test => {
+            const btn = document.createElement('button');
+            btn.className = 'test-btn bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded mb-2 w-full text-left transition text-sm';
+            btn.textContent = test.name;
+            btn.onclick = () => runSingleTest(test.id);
+            buttonsContainer.appendChild(btn);
+        });
+
+        // Helper: Inject scripts into iframe
+        function ensureTestScriptsLoaded() {
+            return new Promise((resolve) => {
+                if (frame.contentWindow.runAutomatedTests) {
+                    resolve();
+                    return;
+                }
+
+                console.log('Injecting test scripts into iframe...');
+
+                // 1. Inject automated-tests.js
+                const script1 = frame.contentDocument.createElement('script');
+                script1.type = 'module';
+                script1.textContent = `
+                    import { 
+                        runAutomatedTests, 
+                        testCardFlip, 
+                        testDamageBadge, 
+                        testGameFlow, 
+                        testThreeDOMSync, 
+                        testPerformance,
+                        testEnergyMechanics,
+                        testBattleMechanics,
+                        testBenchRetreat,
+                        testEvolution,
+                        testTrainerEffects
+                    } from '/tests/automated-tests.js';
+                    
+                    window.runAutomatedTests = runAutomatedTests;
+                    window.testCardFlip = testCardFlip;
+                    window.testDamageBadge = testDamageBadge;
+                    window.testGameFlow = testGameFlow;
+                    window.testThreeDOMSync = testThreeDOMSync;
+                    window.testPerformance = testPerformance;
+                    window.testEnergyMechanics = testEnergyMechanics;
+                    window.testBattleMechanics = testBattleMechanics;
+                    window.testBenchRetreat = testBenchRetreat;
+                    window.testEvolution = testEvolution;
+                    window.testTrainerEffects = testTrainerEffects;
+
+                    // Helper to display results in parent
+                    window.displayTestResult = (result) => {
+                        window.parent.postMessage({ type: 'TEST_RESULT', result }, '*');
+                    };
+
+                    import { bugDetector } from '/tests/bug-detector.js';
+                    window.bugDetector = bugDetector;
+                    console.log('Test scripts injected successfully');
+                `;
+                frame.contentDocument.head.appendChild(script1);
+
+                // Give it a moment to parse/execute
+                setTimeout(resolve, 500);
+            });
+        }
+
+        // Handle messages from iframe
+        window.addEventListener('message', (event) => {
+            if (event.data.type === 'TEST_RESULT') {
+                renderTestResult(event.data.result);
+            }
+        });
+
+        function renderTestResult(result) {
+            const div = document.createElement('div');
+            div.className = `p-3 mb-2 rounded border-l-4 ${result.failed && result.failed.length > 0 ? 'bg-red-900/30 border-red-500' : 'bg-green-900/30 border-green-500'}`;
+
+            let html = `<div class="flex justify-between font-bold ${result.failed && result.failed.length > 0 ? 'text-red-400' : 'text-green-400'}">
+                <span>${result.name}</span>
+                <span>${result.failed && result.failed.length > 0 ? 'FAIL' : 'PASS'}</span>
+            </div>`;
+
+            if (result.passed && result.passed.length) {
+                html += `<div class="mt-1 text-xs text-gray-400">✅ ${result.passed.length} passed</div>`;
+                // result.passed.forEach(m => html += `<div class="text-xs text-gray-500 ml-2">✓ ${m}</div>`);
+            }
+
+            if (result.warnings && result.warnings.length) {
+                result.warnings.forEach(m => html += `<div class="mt-1 text-xs text-yellow-500">⚠️ ${m}</div>`);
+            }
+
+            if (result.failed && result.failed.length) {
+                result.failed.forEach(m => html += `<div class="mt-1 text-sm text-red-400 font-bold">❌ ${m}</div>`);
+            }
+
+            div.innerHTML = html;
+            resultsContainer.appendChild(div);
+            resultsContainer.scrollTop = resultsContainer.scrollHeight;
+        }
+
+        async function runSingleTest(testName) {
+            resultsContainer.innerHTML += `<div class="text-blue-400 mt-2">Running ${testName}...</div>`;
+            await ensureTestScriptsLoaded();
+
+            try {
+                if (typeof frame.contentWindow[testName] === 'function') {
+                    const res = await frame.contentWindow[testName]();
+                    // Result rendering is handled by postMessage if displayTestResult is called, 
+                    // OR we can manually render if the function returns results but doesn't postMessage.
+                    // automated-tests.js calls displayTestResult inside runAutomatedTests, 
+                    // but NOT inside individual test functions unless we changed it.
+                    // The planner added `displayTestResult` helper in automated-tests.js but it looks for element by ID.
+                    // Since we are in parent, we can just use the returned result.
+                    renderTestResult(res);
+                } else {
+                    resultsContainer.innerHTML += `<div class="text-red-500">Error: Function ${testName} not found in iframe</div>`;
+                }
+            } catch (e) {
+                console.error(e);
+                resultsContainer.innerHTML += `<div class="text-red-500">Error: ${e.message}</div>`;
+            }
+        }
+
+        async function runAllTests() {
+            resultsContainer.innerHTML = '<div class="text-yellow-400">Initializing full test suite...</div>';
+            await ensureTestScriptsLoaded();
+
+            try {
+                if (typeof frame.contentWindow.runAutomatedTests === 'function') {
+                    // runAutomatedTests in iframe handles execution and logging to its own context,
+                    // but it tries to write to parent document element 'test-results' if found.
+                    // Our restored automated-tests.js looks for window.parent.document.getElementById('test-results').
+                    // So it should work directly!
+                    await frame.contentWindow.runAutomatedTests();
+                } else {
+                    resultsContainer.innerHTML += `<div class="text-red-500">Error: runAutomatedTests not found</div>`;
+                }
+            } catch (e) {
+                console.error(e);
+                resultsContainer.innerHTML += `<div class="text-red-500">Error: ${e.message}</div>`;
+            }
+        }
+
+        // Event Listeners
+        runAllBtn.onclick = runAllTests;
+
+        runDetectorBtn.onclick = async () => {
+            resultsContainer.innerHTML += `<div class="text-purple-400 mt-2">Running Bug Detector...</div>`;
+            await ensureTestScriptsLoaded();
+            if (frame.contentWindow.bugDetector) {
+                const issues = await frame.contentWindow.bugDetector.detectAll();
+                resultsContainer.innerHTML += `<pre class="text-xs text-gray-400 bg-black p-2 mt-2 rounded">${JSON.stringify(issues, null, 2)}</pre>`;
+            }
+        };
+
+        // Auto-load scripts on frame load
+        frame.onload = () => {
+            console.log('Game frame loaded');
+            // ensureTestScriptsLoaded(); // Optional: greedy load
+        };
+    </script>
+</body>
+
+</html>

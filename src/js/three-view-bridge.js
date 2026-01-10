@@ -24,6 +24,13 @@ export class ThreeViewBridge {
     }
 
     /**
+     * 後方互換性用: gameBoardプロパティでgameBoard3Dにアクセス可能にする
+     */
+    get gameBoard() {
+        return this.gameBoard3D;
+    }
+
+    /**
      * 初期化
      */
     async init(playmatSlotsData) {
@@ -42,9 +49,6 @@ export class ThreeViewBridge {
 
             await this.gameBoard3D.init(playmatSlotsData);
             this.isEnabled = true;
-
-            console.log('🎮 Three.js View Bridge initialized - All animations enabled');
-
             return true;
         } catch (error) {
             console.error('❌ ThreeViewBridge init failed:', error);
@@ -116,6 +120,9 @@ export class ThreeViewBridge {
         // 差分検出
         if (this._stateEquals(this.lastState, state)) return;
 
+        // ✅ ステートに存在しなくなったカードをクリーンアップ（重複レンダリング防止）
+        this._cleanupStaleCards(state);
+
         // アクティブポケモン
         await this._renderActive('player', state.players.player.active);
         await this._renderActive('cpu', state.players.cpu.active);
@@ -128,22 +135,77 @@ export class ThreeViewBridge {
         await this._renderDeck('player', state.players.player.deck);
         await this._renderDeck('cpu', state.players.cpu.deck);
 
-        // サイドカード
-        await this._renderPrize('player', state.players.player.prizes);
-        await this._renderPrize('cpu', state.players.cpu.prizes);
+        // サイドカード（配置確定後のみレンダリング）
+        // セットアップフェーズ中はまだサイドカードを表示しない
+        const setupPhases = ['setup', 'initialPokemonSelection'];
+        if (!setupPhases.includes(state.phase)) {
+            await this._renderPrize('player', state.players.player.prize);
+            await this._renderPrize('cpu', state.players.cpu.prize);
+        }
 
         // トラッシュ
         await this._renderDiscard('player', state.players.player.discard);
         await this._renderDiscard('cpu', state.players.cpu.discard);
 
         // ✅ 手札は DOM/CSS版に任せる（一般的なTCG方式）
-        // Three.js版の手札カードを完全に削除
+        // ✅ ハイブリッドモード: Three.js版の手札カードを完全に削除（DOM版が担当）
         this._clearHand('player');
         this._clearHand('cpu');
-        // await this._renderHand('player', state.players.player.hand);
-        // await this._renderHand('cpu', state.players.cpu.hand);
 
         this.lastState = this._cloneState(state);
+    }
+
+    /**
+     * ステートに存在しなくなったカードを削除（重複レンダリング防止）
+     */
+    _cleanupStaleCards(state) {
+        // 現在ステートに存在するカードのruntimeIdを収集
+        const validRuntimeIds = new Set();
+
+        // active
+        if (state.players.player.active?.runtimeId) {
+            validRuntimeIds.add(state.players.player.active.runtimeId);
+        }
+        if (state.players.cpu.active?.runtimeId) {
+            validRuntimeIds.add(state.players.cpu.active.runtimeId);
+        }
+
+        // bench
+        state.players.player.bench.forEach(card => {
+            if (card?.runtimeId) validRuntimeIds.add(card.runtimeId);
+        });
+        state.players.cpu.bench.forEach(card => {
+            if (card?.runtimeId) validRuntimeIds.add(card.runtimeId);
+        });
+
+        // prize（配置確定後のみ有効）
+        const setupPhases = ['setup', 'initialPokemonSelection'];
+        if (!setupPhases.includes(state.phase)) {
+            state.players.player.prize?.forEach(card => {
+                if (card?.runtimeId) validRuntimeIds.add(card.runtimeId);
+            });
+            state.players.cpu.prize?.forEach(card => {
+                if (card?.runtimeId) validRuntimeIds.add(card.runtimeId);
+            });
+        }
+
+        // 特殊なキー（deck, discardは単一表示）
+        validRuntimeIds.add('deck-player');
+        validRuntimeIds.add('deck-cpu');
+        validRuntimeIds.add('discard-player');
+        validRuntimeIds.add('discard-cpu');
+
+        // Map内のカードで、ステートに存在しないものを削除
+        const keysToRemove = [];
+        this.gameBoard3D.cards.forEach((card, key) => {
+            if (!validRuntimeIds.has(key)) {
+                keysToRemove.push(key);
+            }
+        });
+
+        keysToRemove.forEach(key => {
+            this.gameBoard3D.removeCard(key);
+        });
     }
 
     /**
@@ -191,6 +253,7 @@ export class ThreeViewBridge {
     /**
      * サイドカードをレンダリング（裏向き）
      * プレイマットには3スロットしかないので、6枚のサイドカードを2枚ずつ重ねる
+     * 2枚目のカードは少しずらして配置（プレイマット風）
      */
     async _renderPrize(owner, prizes) {
         if (!prizes || prizes.length === 0) return;
@@ -206,7 +269,8 @@ export class ThreeViewBridge {
             const stackLevel = Math.floor(i / maxSlots);
 
             const slotKey = `prize-${owner}-${slotIndex}`;
-            const prizeCardKey = `prize-${owner}-${i}`;
+            // ✅ ゲームエンジンの実際のruntimeIdを使用（クリック可能にするため）
+            const prizeCardKey = prizeCard.runtimeId || `prize-${owner}-${i}`;
 
             if (this.gameBoard3D.cards.has(prizeCardKey)) continue;
 
@@ -218,6 +282,7 @@ export class ThreeViewBridge {
 
             const card = await this.gameBoard3D.addCard(prizeCardKey, {
                 cardId: prizeCard.id || 'prize',
+                runtimeId: prizeCardKey,  // ✅ 正しいruntimeIdを設定
                 frontTexture: null,
                 backTexture: 'assets/ui/card_back.webp',
                 zone: 'prize',
@@ -227,9 +292,17 @@ export class ThreeViewBridge {
 
             if (card) {
                 const pos = slot.getMesh().position;
-                // 重ねる場合は高さをずらす
+                // ✅ 重ねる場合は高さ + X/Z方向にずらす（プレイマット風）
                 const yOffset = 5 + stackLevel * 3;
-                card.setPosition(pos.x, yOffset, pos.z);
+                // ✅ 下のカード（stackLevel 0）を左下にずらす、上のカード（stackLevel 1）は中央
+                // (1 - stackLevel) で stackLevel 0 のときだけオフセットが適用される
+                const baseOffset = 8;
+                const isBottomCard = stackLevel === 0;
+                // プレイヤー側: 左下にずらす（X-, Z+）、CPU側: 右上にずらす（X+, Z-）
+                const xOffset = isBottomCard ? (owner === 'player' ? -baseOffset : baseOffset) : 0;
+                const zOffset = isBottomCard ? (owner === 'player' ? baseOffset : -baseOffset) : 0;
+
+                card.setPosition(pos.x + xOffset, yOffset, pos.z + zOffset);
                 card.layFlat();
                 card.showBack();
 
@@ -295,6 +368,11 @@ export class ThreeViewBridge {
     _clearHand(owner) {
         const keysToRemove = [];
         this.gameBoard3D.cards.forEach((card, runtimeId) => {
+            // ✅ Promiseの場合はまだロード中なのでスキップ
+            if (card instanceof Promise) return;
+            // Card3Dオブジェクトでない場合もスキップ
+            if (!card.getMesh) return;
+
             const cardOwner = card.getMesh()?.userData?.owner;
             const cardZone = card.getMesh()?.userData?.zone;
             // 同じownerで、zoneが'hand'のカードを削除
@@ -306,46 +384,9 @@ export class ThreeViewBridge {
     }
 
     /**
-     * 手札をレンダリング
+     * @deprecated ハイブリッドモード: 手札はDOM版で管理されるため、このメソッドは使用されません
+     * _clearHand()のみが使用されます（Three.js版手札の削除用）
      */
-    async _renderHand(owner, hand) {
-        const isCpu = owner === 'cpu';
-
-        // ✅ 修正: 手札を完全にクリア（増殖バグ対策）
-        this._clearHand(owner);
-
-        // ✅ 手札を再構築
-        if (hand && hand.length > 0) {
-            for (let i = 0; i < hand.length; i++) {
-                const handCard = hand[i];
-                if (!handCard) continue;
-
-                // ✅ runtimeIdをそのままキーとして使用（addCard/removeCardと一致）
-                const imagePath = isCpu ? null : getCardImagePath(handCard.name_en, handCard);
-                const card = await this.gameBoard3D.addCard(handCard.runtimeId, {
-                    cardId: handCard.id,
-                    runtimeId: handCard.runtimeId,
-                    frontTexture: imagePath,
-                    backTexture: 'assets/ui/card_back.webp',
-                    zone: 'hand',
-                    owner,
-                    index: i,
-                    cardType: handCard.cardType || handCard.type,
-                });
-
-                if (card) {
-                    const pos = this.gameBoard3D.getHandCardPosition(owner, i, hand.length);
-                    card.setPosition(pos.x, pos.y, pos.z);
-                    // 手札カードの回転設定
-                    const rotationX = pos.rotationX || 0;
-                    const rotationY = isCpu ? 180 : 0;
-                    const rotationZ = pos.rotationZ || 0;
-                    card.setRotation(rotationX, rotationY, rotationZ);
-                    card.saveBasePosition();
-                }
-            }
-        }
-    }
 
     /**
      * アクティブポケモンをレンダリング
@@ -424,8 +465,19 @@ export class ThreeViewBridge {
      * カードを移動
      */
     async moveCard(runtimeId, fromZone, toZone, options = {}) {
-        const card = this.gameBoard3D.cards.get(runtimeId);
+        let card = this.gameBoard3D.cards.get(runtimeId);
         if (!card) return;
+
+        // ✅ Promiseの場合は完了を待つ
+        if (card instanceof Promise) {
+            try {
+                card = await card;
+            } catch {
+                return;
+            }
+        }
+        // Card3Dオブジェクトでない場合はスキップ
+        if (!card || !card.setPosition) return;
 
         // アニメーション付きで移動
         const targetSlotKey = `${toZone}-${options.owner || 'player'}-${options.index || 0}`;
@@ -433,7 +485,7 @@ export class ThreeViewBridge {
 
         if (targetSlot) {
             const pos = targetSlot.getMesh().position;
-            // TODO: GSAP でアニメーション
+            // ✅ 現在の実装: 即座に位置設定（必要に応じて将来GSAPで滑らかなアニメーション追加可能）
             card.setPosition(pos.x, 5, pos.z);
             card.saveBasePosition();
         }
@@ -467,7 +519,7 @@ export class ThreeViewBridge {
                     bench: state.players.player.bench,
                     hand: state.players.player.hand?.map(c => c?.runtimeId) || [],
                     deck: state.players.player.deck?.length || 0,
-                    prizes: state.players.player.prizes?.length || 0,
+                    prize: state.players.player.prize?.length || 0,
                     discard: state.players.player.discard?.map(c => c?.runtimeId) || [],
                 },
                 cpu: {
@@ -475,7 +527,7 @@ export class ThreeViewBridge {
                     bench: state.players.cpu.bench,
                     hand: state.players.cpu.hand?.map(c => c?.runtimeId) || [],
                     deck: state.players.cpu.deck?.length || 0,
-                    prizes: state.players.cpu.prizes?.length || 0,
+                    prize: state.players.cpu.prize?.length || 0,
                     discard: state.players.cpu.discard?.map(c => c?.runtimeId) || [],
                 }
             }
@@ -552,6 +604,19 @@ export class ThreeViewBridge {
         if (this.gameBoard3D) {
             this.gameBoard3D.clearAllCardHighlights();
         }
+    }
+
+    /**
+     * ゲーム開始時のアニメーション
+     */
+    async onGameStart() {
+        if (!this.gameBoard3D) return;
+
+        // カメラアニメーションなどをトリガーできる場所
+        console.log('🎬 ThreeViewBridge: onGameStart triggered');
+
+        // 将来的にカメラワークを追加する場合:
+        // await this.gameBoard3D.cameraController.animateToStartView();
     }
 
     // ==========================================

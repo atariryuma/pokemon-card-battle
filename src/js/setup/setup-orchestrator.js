@@ -19,6 +19,10 @@ import { PokemonPlacementHandler } from './pokemon-placement-handler.js';
 import { setupStateValidator } from './setup-state-validator.js';
 import { ANIMATION_TIMING, SHAKE_CONFIG, MULLIGAN_CONFIG } from '../constants/timing.js';
 import { SequentialAnimator } from '../utils/sequential-animator.js';
+import { animate } from '../animation-manager.js';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger('SetupOrchestrator');
 
 /**
  * セットアップフェーズの定義
@@ -82,7 +86,7 @@ export class InitialSetupOrchestrator {
 
             for (const phase of phases) {
                 if (this.debugEnabled) {
-                    console.log(`🔄 Executing setup phase: ${phase}`);
+                    logger.debug(`🔄 Executing setup phase: ${phase}`);
                 }
 
                 currentState = await this._executePhase(phase, currentState);
@@ -122,8 +126,12 @@ export class InitialSetupOrchestrator {
             const result = await handler(state);
             return result;
         } catch (error) {
-            console.error(`Setup phase ${phase} error:`, error);
-            throw error;
+            logger.error(`Setup phase ${phase} error:`, error);
+            throw new SetupError(
+                SetupErrorType.UNEXPECTED_ERROR,
+                `Failed to execute setup phase: ${phase}`,
+                { originalError: error, phase }
+            );
         } finally {
             this.currentPhase = null;
         }
@@ -167,7 +175,7 @@ export class InitialSetupOrchestrator {
 
         // CPU初期セットアップをスケジュール
         this._scheduleCPUInitialSetup().catch(error => {
-            console.error('Error in CPU initial setup:', error);
+            logger.error('Error in CPU initial setup:', error);
         });
 
         return newState;
@@ -251,7 +259,7 @@ export class InitialSetupOrchestrator {
                 // 再帰的にマリガンチェック
                 return await this._handleMulliganPhase(newState);
             } else {
-                console.warn('Maximum mulligans exceeded, proceeding with current hands');
+                logger.warn('Maximum mulligans exceeded, proceeding with current hands');
                 newState = addLogEntry(newState, {
                     type: 'mulligan_limit',
                     message: `マリガン上限に達しました。現在の手札でゲームを開始します。`
@@ -311,8 +319,8 @@ export class InitialSetupOrchestrator {
 
         // 両者準備完了チェック
         const bothReady = validation.details.playerReady &&
-                          validation.details.cpuReady &&
-                          newState.cpuSetupReady === true;
+            validation.details.cpuReady &&
+            newState.cpuSetupReady === true;
 
         if (bothReady) {
             newState.phase = GAME_PHASES.GAME_START_READY;
@@ -438,8 +446,12 @@ export class InitialSetupOrchestrator {
             const newState = await this.placementHandler.placeNonBlockingCpuSetup(state);
             this.gameContext.updateState(newState);
         } catch (error) {
-            console.error('Error in CPU initial setup:', error);
-            throw error;
+            logger.error('Error in CPU initial setup:', error);
+            throw new SetupError(
+                SetupErrorType.UNEXPECTED_ERROR,
+                'CPU initial setup failed',
+                { originalError: error }
+            );
         }
     }
 
@@ -493,7 +505,7 @@ export class InitialSetupOrchestrator {
             this._checkBothPlayersReady();
 
         } catch (error) {
-            console.error('Error in CPU full auto setup:', error);
+            logger.error('Error in CPU full auto setup:', error);
         }
     }
 
@@ -527,7 +539,7 @@ export class InitialSetupOrchestrator {
                 gameInstance._checkBothPrizeAnimationsComplete();
             }
         } catch (error) {
-            console.error('Error in _checkBothPlayersReady:', error);
+            logger.error('Error in _checkBothPlayersReady:', error);
         }
     }
 
@@ -581,10 +593,8 @@ export class InitialSetupOrchestrator {
         if (handElement) {
             const cards = Array.from(handElement.querySelectorAll('.relative'));
             if (cards.length > 0) {
-                // アニメーションライブラリを使用
-                if (typeof animateFlow !== 'undefined' && animateFlow.handEntry) {
-                    await animateFlow.handEntry(cards);
-                }
+                // ✅ flow.js削除: animate.handDealで代替
+                await animate.handDeal(cards, playerId);
             }
         }
     }
@@ -610,12 +620,14 @@ export class InitialSetupOrchestrator {
     }
 
     /**
-     * デバッグモード設定
+     * デバッグモード設定（廃止: loggerシステムを使用）
+     * @deprecated logger経由でログレベルを制御してください
      */
     setDebugMode(enabled) {
         this.debugEnabled = enabled;
         if (this.placementHandler) {
             this.placementHandler.setDebugMode(enabled);
         }
+        logger.warn('setDebugMode is deprecated. Use logger configuration instead.');
     }
 }

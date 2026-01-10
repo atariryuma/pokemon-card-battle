@@ -5,18 +5,11 @@
  * 最小限のコードで最大の効果を提供
  */
 
-export const ANIMATION_TIMING = {
-    fast: 200,
-    normal: 400, 
-    slow: 800,
-    combat: 600
-};
+// ✅ 定数はconstants.jsに統合
+import { ANIMATION_TIMING, ANIMATION_EASING } from './constants.js';
 
-export const ANIMATION_EASING = {
-    default: 'cubic-bezier(0.4, 0, 0.2, 1)',
-    bounce: 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
-    smooth: 'cubic-bezier(0.25, 0.46, 0.45, 0.94)'
-};
+// ✅ 後方互換性のため再エクスポート
+export { ANIMATION_TIMING, ANIMATION_EASING };
 
 /**
  * アニメーション基底クラス
@@ -116,7 +109,7 @@ export class AnimationCore {
      */
     initializeAnimationStyles() {
         if (document.getElementById('pokemon-animation-styles')) return;
-        
+
         const style = document.createElement('style');
         style.id = 'pokemon-animation-styles';
         style.textContent = `

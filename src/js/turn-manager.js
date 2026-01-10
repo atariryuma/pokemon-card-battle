@@ -12,6 +12,8 @@ import * as Logic from './logic.js';
 import { noop } from './utils.js';
 import { eventBus, GameEventTypes } from './core/event-bus.js';
 import { GAME_CONFIG } from './constants/game-config.js';
+import StatusManager from './game/StatusConditions.js';
+import AIEngine from './ai/AIEngine.js';
 
 /**
  * ターン管理クラス
@@ -28,8 +30,20 @@ export class TurnManager {
     // 非同期処理管理
     this.pendingOperations = new Set();
     this.phaseTransitions = [];
+
+    // AI Engine (default: medium difficulty)
+    this.aiEngine = new AIEngine('medium');
   }
-  
+
+  /**
+   * AI難易度を設定
+   * @param {'easy'|'medium'|'hard'} difficulty - 難易度
+   */
+  setAIDifficulty(difficulty) {
+    this.aiEngine.setDifficulty(difficulty);
+    noop(`🤖 AI difficulty set to: ${difficulty}`);
+  }
+
   /**
    * 非同期処理の同期化
    */
@@ -39,11 +53,11 @@ export class TurnManager {
       this.pendingOperations.clear();
     }
   }
-  
+
   async _trackAsyncOperation(operation) {
     const promise = Promise.resolve(operation);
     this.pendingOperations.add(promise);
-    
+
     try {
       const result = await promise;
       return result;
@@ -59,10 +73,10 @@ export class TurnManager {
    */
   async startPlayerTurn(state) {
     noop('🎯 Starting player turn...');
-    
+
     // 保留中の操作が完了するまで待機
     await this._waitForPendingOperations();
-    
+
     let newState = cloneGameState(state);
 
     // ターン数増加（最初のターンは既に1なので、2ターン目から増加）
@@ -117,7 +131,7 @@ export class TurnManager {
       await this.animateCardDraw('player');
 
       // メインフェーズに自動移行
-      
+
 
       newState = addLogEntry(newState, {
         type: 'card_draw',
@@ -142,27 +156,27 @@ export class TurnManager {
       case 'play_basic_pokemon':
         newState = this.handlePlayBasicPokemon(newState, actionData);
         break;
-      
+
       case 'attach_energy':
         newState = this.handleAttachEnergy(newState, actionData);
         break;
-      
+
       case 'use_trainer':
         newState = this.handleUseTrainer(newState, actionData);
         break;
-      
+
       case 'retreat_pokemon':
         newState = this.handleRetreat(newState, actionData);
         break;
-      
+
       case 'declare_attack':
         newState = this.handleAttackDeclaration(newState, actionData);
         break;
-      
+
       case 'end_turn':
         newState = this.endPlayerTurn(newState);
         break;
-      
+
       default:
         console.warn(`Unknown player action: ${action}`);
     }
@@ -175,7 +189,7 @@ export class TurnManager {
    */
   handlePlayBasicPokemon(state, { cardId, benchIndex }) {
     let newState = Logic.placeCardOnBench(state, 'player', cardId, benchIndex);
-    
+
     if (newState !== state) {
       newState = addLogEntry(newState, {
         type: 'pokemon_played',
@@ -197,7 +211,7 @@ export class TurnManager {
     }
 
     let newState = Logic.attachEnergy(state, 'player', energyId, pokemonId);
-    
+
     if (newState !== state) {
       newState = addLogEntry(newState, {
         type: 'energy_attached',
@@ -215,7 +229,7 @@ export class TurnManager {
   handleUseTrainer(state, { cardId, trainerType }) {
     // トレーナーズ処理は今回は簡略化
     let newState = cloneGameState(state);
-    
+
     newState = addLogEntry(newState, {
       type: 'trainer_used',
       player: 'player',
@@ -235,7 +249,7 @@ export class TurnManager {
     }
 
     let newState = Logic.retreat(state, 'player', fromActiveId, toBenchIndex);
-    
+
     if (newState !== state) {
       newState.canRetreat = false;
       newState = addLogEntry(newState, {
@@ -272,15 +286,15 @@ export class TurnManager {
    */
   handleAttackDeclaration(state, { attackIndex }) {
     let newState = cloneGameState(state);
-    
+
     // 攻撃制限チェック
     if (newState.turnState.hasAttacked) {
       throw new Error('このターンは既に攻撃しました');
     }
-    
+
     // 攻撃済みフラグを設定
     newState.turnState.hasAttacked = true;
-    
+
     // 攻撃フェーズに移行
     newState.phase = GAME_PHASES.PLAYER_ATTACK;
     newState.pendingAction = {
@@ -299,7 +313,7 @@ export class TurnManager {
   async executeAttack(state) {
     noop('⚔️ Executing attack...');
     let newState = cloneGameState(state);
-    
+
     // 変数をtryブロックの外で定義
     let attacker, attackIndex;
 
@@ -312,93 +326,95 @@ export class TurnManager {
       const defender = attacker === 'player' ? 'cpu' : 'player';
 
       noop(`🗡️ ${attacker} attacks ${defender} with attack index ${attackIndex}`);
-    
-    // 攻撃前の状態ログ
-    const attackerPokemon = newState.players[attacker].active;
-    const defenderPokemon = newState.players[defender].active;
-    noop(`👊 Attacker: ${attackerPokemon?.name_ja} (HP: ${attackerPokemon?.hp - (attackerPokemon?.damage || 0)}/${attackerPokemon?.hp})`);
-    noop(`🛡️ Defender: ${defenderPokemon?.name_ja} (HP: ${defenderPokemon?.hp - (defenderPokemon?.damage || 0)}/${defenderPokemon?.hp})`);
 
-    // 攻撃実行
-    newState = Logic.performAttack(newState, attacker, attackIndex);
-    
-    // 攻撃後の状態ログ（簡潔なゲームログ）
-    const defenderAfter = newState.players[defender].active;
-    const atkMon = newState.players[attacker].active;
-    const usedAttack = atkMon?.attacks?.[attackIndex];
-    const dealt = defenderAfter && defenderPokemon ? (defenderAfter.damage - (defenderPokemon.damage || 0)) : 0;
-    newState = addLogEntry(newState, {
-      type: 'attack',
-      player: attacker,
-      message: `${atkMon?.name_ja || '不明'}の「${usedAttack?.name_ja || 'ワザ'}」で${dealt > 0 ? dealt : 0}ダメージ`
-    });
-
-    // ✅ Three.js専用: 攻撃アニメーション（タイプ別エフェクト付き）
-    const attackerAfter = newState.players[attacker].active;
-    const attack = attackerAfter.attacks[attackIndex];
-    const primaryType = attackerAfter.types && attackerAfter.types[0] ? attackerAfter.types[0] : 'Colorless';
-    
-    // 戦闘アニメーションシーケンス（新API使用）
-    const finalDamage = defenderAfter ? (defenderAfter.damage - (defenderPokemon?.damage || 0)) : 0;
-    const targetId = defenderAfter ? defenderAfter.id : null;
-    
-    if (targetId) {
-      // Get the actual attacker Pokemon ID
+      // 攻撃前の状態ログ
       const attackerPokemon = newState.players[attacker].active;
-      const attackerId = attackerPokemon ? attackerPokemon.id : null;
-      
-      await animate.attackSequence(primaryType.toLowerCase(), finalDamage, targetId, {
-        attackerId: attackerId,
-        attackIndex
-      });
-    }
+      const defenderPokemon = newState.players[defender].active;
+      noop(`👊 Attacker: ${attackerPokemon?.name_ja} (HP: ${attackerPokemon?.hp - (attackerPokemon?.damage || 0)}/${attackerPokemon?.hp})`);
+      noop(`🛡️ Defender: ${defenderPokemon?.name_ja} (HP: ${defenderPokemon?.hp - (defenderPokemon?.damage || 0)}/${defenderPokemon?.hp})`);
 
-    // きぜつチェックとアニメーション
-    const defenderStateBeforeKO = newState.players[defender];
-    const isKnockout = defenderStateBeforeKO.active && defenderStateBeforeKO.active.damage >= defenderStateBeforeKO.active.hp;
-    
-    if (isKnockout) {
-      // ノックアウトのログ
-      if (defenderStateBeforeKO.active) {
-        newState = addLogEntry(newState, {
-          type: 'knockout',
-          player: defender,
-          message: `${defenderStateBeforeKO.active.name_ja}がきぜつ`
+      // 攻撃実行
+      newState = Logic.performAttack(newState, attacker, attackIndex);
+
+      // 攻撃後の状態ログ（簡潔なゲームログ）
+      const defenderAfter = newState.players[defender].active;
+      const atkMon = newState.players[attacker].active;
+      const usedAttack = atkMon?.attacks?.[attackIndex];
+      const dealt = defenderAfter && defenderPokemon ? (defenderAfter.damage - (defenderPokemon.damage || 0)) : 0;
+      newState = addLogEntry(newState, {
+        type: 'attack',
+        player: attacker,
+        message: `${atkMon?.name_ja || '不明'}の「${usedAttack?.name_ja || 'ワザ'}」で${dealt > 0 ? dealt : 0}ダメージ`
+      });
+
+      // ✅ Three.js専用: 攻撃アニメーション（タイプ別エフェクト付き）
+      const attackerAfter = newState.players[attacker].active;
+      const attack = attackerAfter.attacks[attackIndex];
+      const primaryType = attackerAfter.types && attackerAfter.types[0] ? attackerAfter.types[0] : 'Colorless';
+
+      // 戦闘アニメーションシーケンス（新API使用）
+      // ✅ runtimeIdを使用（Three.jsがカードを識別するため）
+      const finalDamage = defenderAfter ? (defenderAfter.damage - (defenderPokemon?.damage || 0)) : 0;
+      const targetRuntimeId = defenderAfter ? defenderAfter.runtimeId : null;
+
+      if (targetRuntimeId) {
+        // Get the actual attacker Pokemon runtimeId
+        const attackerPokemon = newState.players[attacker].active;
+        const attackerRuntimeId = attackerPokemon ? attackerPokemon.runtimeId : null;
+
+        await animate.attackSequence(primaryType.toLowerCase(), finalDamage, targetRuntimeId, {
+          attackerId: attackerRuntimeId,
+          attackIndex
         });
       }
-      // Play knockout animation with unified API
-      await animate.knockout(defenderStateBeforeKO.active.id, {
-        playerId: defender
-      });
-      
-      // Process knockout logic (sets up prize selection phase)
-      newState = Logic.checkForKnockout(newState, defender);
-      
-      // Store that this attack caused a knockout for later turn management
-      newState.attackCausedKnockout = true;
-      newState.knockoutAttacker = attacker;
-      
-      // Clear pending action and return - prize selection phase will handle next steps
+
+      // きぜつチェックとアニメーション
+      const defenderStateBeforeKO = newState.players[defender];
+      const isKnockout = defenderStateBeforeKO.active && defenderStateBeforeKO.active.damage >= defenderStateBeforeKO.active.hp;
+
+      if (isKnockout) {
+        // ノックアウトのログ
+        if (defenderStateBeforeKO.active) {
+          newState = addLogEntry(newState, {
+            type: 'knockout',
+            player: defender,
+            message: `${defenderStateBeforeKO.active.name_ja}がきぜつ`
+          });
+        }
+        // Play knockout animation with unified API
+        // ✅ runtimeIdを使用（Three.jsがカードを識別するため）
+        await animate.knockout(defenderStateBeforeKO.active.runtimeId, {
+          playerId: defender
+        });
+
+        // Process knockout logic (sets up prize selection phase)
+        newState = Logic.checkForKnockout(newState, defender);
+
+        // Store that this attack caused a knockout for later turn management
+        newState.attackCausedKnockout = true;
+        newState.knockoutAttacker = attacker;
+
+        // Clear pending action and return - prize selection phase will handle next steps
+        newState.pendingAction = null;
+        return newState;
+      }
+
+      // ペンディングアクションクリア
       newState.pendingAction = null;
-      return newState;
-    }
 
-    // ペンディングアクションクリア
-    newState.pendingAction = null;
+      // 勝敗判定（新アクティブ選択が不要な場合のみ）
+      newState = Logic.checkForWinner(newState);
+      if (newState.phase === GAME_PHASES.GAME_OVER) {
+        noop('🏆 Game ended after attack:', newState.winner, newState.gameEndReason);
+        return newState;
+      }
 
-    // 勝敗判定（新アクティブ選択が不要な場合のみ）
-    newState = Logic.checkForWinner(newState);
-    if (newState.phase === GAME_PHASES.GAME_OVER) {
-      noop('🏆 Game ended after attack:', newState.winner, newState.gameEndReason);
-      return newState;
-    }
-
-    // 攻撃後はターン終了（自動）
-    if (attacker === 'player') {
-      newState = this.endPlayerTurn(newState);
-    } else {
-      newState = await this.endCpuTurn(newState);
-    }
+      // 攻撃後はターン終了（自動）
+      if (attacker === 'player') {
+        newState = this.endPlayerTurn(newState);
+      } else {
+        newState = await this.endCpuTurn(newState);
+      }
 
       newState = addLogEntry(newState, {
         type: 'attack_executed',
@@ -409,13 +425,13 @@ export class TurnManager {
       return newState;
     } catch (error) {
       console.error('攻撃実行中にエラーが発生しました:', error);
-      
+
       // attacker変数が定義されている場合のみ処理実行
       if (attacker && attackIndex !== undefined) {
         // エラー時も基本的な攻撃処理は実行
         newState = Logic.performAttack(newState, attacker, attackIndex);
         newState.pendingAction = null;
-        
+
         // 攻撃後のターン終了処理
         if (attacker === 'player') {
           newState = this.endPlayerTurn(newState);
@@ -426,7 +442,7 @@ export class TurnManager {
         console.warn('攻撃者情報が不完全なため、エラー時の攻撃処理をスキップします');
         newState.pendingAction = null;
       }
-      
+
       return newState;
     }
   }
@@ -555,7 +571,7 @@ export class TurnManager {
   async cpuPromoteToActive(state) {
     let newState = cloneGameState(state);
     const benchPokemon = newState.players.cpu.bench.map((p, index) => ({ pokemon: p, originalIndex: index })).filter(item => item.pokemon !== null);
-    
+
     if (benchPokemon.length > 0) {
       let bestCandidate = null;
       let maxScore = -1;
@@ -574,7 +590,7 @@ export class TurnManager {
 
         // 3. にげるコストの低さ（コストが高いほど減点）
         score -= (p.retreat_cost || 0) * 20;
-        
+
         // 4. エネルギーがついているか
         score += (p.attached_energy?.length || 0) * 10;
 
@@ -586,16 +602,16 @@ export class TurnManager {
 
       const selectedIndex = bestCandidate.originalIndex;
       newState = Logic.promoteToActive(newState, 'cpu', selectedIndex);
-      
+
       await this.simulateCpuThinking();
-      
+
       // CPU新アクティブ選択完了後の勝敗判定
       newState = Logic.checkForWinner(newState);
       if (newState.phase === GAME_PHASES.GAME_OVER) {
         noop('🏆 Game ended after CPU new active selection:', newState.winner, newState.gameEndReason);
         return newState;
       }
-      
+
       // 新しいポケモンがバトル場に出たので、フェーズをCPUのメインフェーズに戻す
       newState.phase = GAME_PHASES.CPU_MAIN;
       newState.prompt.message = '相手のターンです...';
@@ -610,7 +626,7 @@ export class TurnManager {
       // ベンチにポケモンがいない場合、CPUはポケモンを出せないためゲーム終了
       newState = Logic.checkForWinner(newState);
       if (newState.phase !== GAME_PHASES.GAME_OVER) {
-          newState = await this.endCpuTurn(newState);
+        newState = await this.endCpuTurn(newState);
       }
     }
 
@@ -623,13 +639,13 @@ export class TurnManager {
   async cpuPlayBasicPokemon(state) {
     let newState = cloneGameState(state);
     const cpuState = newState.players.cpu;
-    
+
     const emptyBenchIndex = cpuState.bench.findIndex(slot => slot === null);
     if (emptyBenchIndex === -1) {
       return newState; // ベンチに空きがない
     }
 
-    const basicPokemonInHand = cpuState.hand.filter(card => 
+    const basicPokemonInHand = cpuState.hand.filter(card =>
       card.card_type === 'Pokémon' && card.stage === 'BASIC'
     );
 
@@ -656,17 +672,20 @@ export class TurnManager {
           bestPokemonToPlay = pokemon;
         }
       }
-      
+
       if (bestPokemonToPlay) {
         newState = Logic.placeCardOnBench(newState, 'cpu', bestPokemonToPlay.id, emptyBenchIndex);
-        
+
+        // ✅ flow.js削除: animate.cardMoveを使用
         try {
-          const { animateFlow } = await import('./animations/flow.js');
-          await animateFlow.handToBench('cpu', bestPokemonToPlay.runtimeId || bestPokemonToPlay.id, emptyBenchIndex, { isSetupPhase: false });
+          await animate.cardMove('cpu', bestPokemonToPlay.id, 'hand->bench', {
+            benchIndex: emptyBenchIndex,
+            card: bestPokemonToPlay
+          });
         } catch (e) {
           console.warn('CPU bench place animation failed:', e);
         }
-        
+
         newState = addLogEntry(newState, {
           type: 'pokemon_played',
           player: 'cpu',
@@ -729,9 +748,9 @@ export class TurnManager {
         break; // 進化できるポケモンがもういない
       }
     }
-    
-    if(evolutionPerformed){
-        await this.simulateCpuThinking(800);
+
+    if (evolutionPerformed) {
+      await this.simulateCpuThinking(800);
     }
 
     return newState;
@@ -767,7 +786,7 @@ export class TurnManager {
       for (const energy of energyCards) {
         // Simulate attaching this energy
         const tempPokemon = { ...pokemon, attached_energy: [...(pokemon.attached_energy || []), energy] };
-        
+
         // Check if any new attacks become usable
         for (const attack of tempPokemon.attacks) {
           const canUseNow = Logic.hasEnoughEnergy(tempPokemon, attack);
@@ -790,7 +809,8 @@ export class TurnManager {
       const { pokemon, energy } = bestAttachment;
       newState = Logic.attachEnergy(newState, 'cpu', energy.id, pokemon.id);
       if (newState !== state) {
-        await animate.energyAttach(energy.id, pokemon.id, newState);
+        // ✅ runtimeIdを使用（Three.jsがカードを識別するため）
+        await animate.energyAttach(energy.runtimeId || energy.id, pokemon.runtimeId, newState);
       }
       return newState;
     }
@@ -800,19 +820,21 @@ export class TurnManager {
       const energyToAttach = energyCards[0];
       newState = Logic.attachEnergy(newState, 'cpu', energyToAttach.id, cpuState.active.id);
       if (newState !== state) {
-        await animate.energyAttach(energyToAttach.id, cpuState.active.id, newState);
+        // ✅ runtimeIdを使用（Three.jsがカードを識別するため）
+        await animate.energyAttach(energyToAttach.runtimeId || energyToAttach.id, cpuState.active.runtimeId, newState);
       }
       return newState;
     }
-    
+
     // FINAL FALLBACK: If no active pokemon, attach to the first pokemon on bench
-    if(allPokemon.length > 0){
-        const energyToAttach = energyCards[0];
-        const targetPokemon = allPokemon[0];
-        newState = Logic.attachEnergy(newState, 'cpu', energyToAttach.id, targetPokemon.id);
-        if (newState !== state) {
-            await animate.energyAttach(energyToAttach.id, targetPokemon.id, newState);
-        }
+    if (allPokemon.length > 0) {
+      const energyToAttach = energyCards[0];
+      const targetPokemon = allPokemon[0];
+      newState = Logic.attachEnergy(newState, 'cpu', energyToAttach.id, targetPokemon.id);
+      if (newState !== state) {
+        // ✅ runtimeIdを使用（Three.jsがカードを識別するため）
+        await animate.energyAttach(energyToAttach.runtimeId || energyToAttach.id, targetPokemon.runtimeId, newState);
+      }
     }
 
     return newState;
@@ -825,7 +847,7 @@ export class TurnManager {
     const activePokemon = state.players.cpu.active;
     if (!activePokemon || !activePokemon.attacks) return false;
 
-    return activePokemon.attacks.some(attack => 
+    return activePokemon.attacks.some(attack =>
       Logic.hasEnoughEnergy(activePokemon, attack)
     );
   }
@@ -836,7 +858,7 @@ export class TurnManager {
   async cpuPerformAttack(state) {
     let newState = cloneGameState(state);
     const activePokemon = newState.players.cpu.active;
-    
+
     const usableAttacks = activePokemon.attacks
       .map((attack, index) => ({ ...attack, index }))
       .filter(attack => Logic.hasEnoughEnergy(activePokemon, attack));
@@ -854,7 +876,7 @@ export class TurnManager {
 
       // 攻撃実行
       newState = await this.executeAttack(newState);
-      
+
     }
 
     return newState;
@@ -870,12 +892,12 @@ export class TurnManager {
     const attackScores = usableAttacks.map(attack => {
       let score = attack.damage || 0;
       const remainingHP = defender.hp - (defender.damage || 0);
-      
+
       // 相手を倒せる攻撃に高い優先度
       if (score >= remainingHP) {
         score += 100; // KOボーナス
       }
-      
+
       // 弱点を突ける場合の追加スコア
       if (defender.weakness && attacker.types) {
         // weakness is an object with {type: string, value: string}
@@ -891,18 +913,18 @@ export class TurnManager {
           }
         }
       }
-      
+
       return { ...attack, score };
     });
 
     // スコア順にソート
     attackScores.sort((a, b) => b.score - a.score);
-    
+
     // 上位攻撃からランダム選択（完全に予測可能にしない）
-    const topAttacks = attackScores.filter(attack => 
+    const topAttacks = attackScores.filter(attack =>
       attack.score >= attackScores[0].score - 10
     );
-    
+
     return topAttacks[Math.floor(Math.random() * topAttacks.length)];
   }
 
@@ -933,7 +955,7 @@ export class TurnManager {
         const bestCandidateIndex = healthyBenchPokemon[0].originalIndex;
 
         const { newState: retreatedState, discardedEnergy } = Logic.retreat(newState, 'cpu', active.id, bestCandidateIndex);
-        
+
         if (retreatedState !== newState) {
           // アニメーションなどをここに追加可能
           await this.simulateCpuThinking(600);
@@ -970,40 +992,54 @@ export class TurnManager {
     let newState = cloneGameState(state);
     const playerState = newState.players[playerId];
 
-    if (playerState.active && playerState.active.special_conditions) {
-      const conditions = playerState.active.special_conditions;
+    if (!playerState.active) {
+      return newState; // アクティブポケモンがいない
+    }
 
-      // 毒ダメージ
-      if (conditions.includes('Poisoned')) {
-        playerState.active.damage = (playerState.active.damage || 0) + 10;
-        newState = addLogEntry(newState, {
-          type: 'poison_damage',
-          player: playerId,
-          message: `${playerState.active.name_ja}が毒ダメージを受けました`
-        });
-        
-        // 毒アニメーションを実行
-        animate.effect.condition('poisoned', playerState.active.id).catch(console.warn);
-      }
+    const pokemon = playerState.active;
 
-      // 火傷判定
-      if (conditions.includes('Burned')) {
-        // 火傷アニメーションを実行
-        animate.effect.condition('burned', playerState.active.id).catch(console.warn);
-        
-        // コイントス（簡略化）
-        if (Math.random() < 0.5) {
-          playerState.active.damage = (playerState.active.damage || 0) + 20;
-          newState = addLogEntry(newState, {
-            type: 'burn_damage',
-            player: playerId,
-            message: `${playerState.active.name_ja}が火傷ダメージを受けました`
-          });
-        } else {
-          // 火傷回復
-          conditions.splice(conditions.indexOf('Burned'), 1);
-        }
-      }
+    // StatusManagerを使用してターン間処理を実行
+    const result = StatusManager.processBetweenTurns(pokemon);
+
+    // 更新されたポケモンを適用
+    playerState.active = result.pokemon;
+
+    // ログメッセージを追加
+    result.log.forEach(message => {
+      newState = addLogEntry(newState, {
+        type: 'status_condition',
+        player: playerId,
+        message: message
+      });
+    });
+
+    // アニメーション実行（状態異常に応じて）
+    const status = StatusManager.getConditionStatus(result.pokemon);
+
+    if (status.poisoned) {
+      animate.effect.condition('poisoned', pokemon.runtimeId || pokemon.id).catch(console.warn);
+    }
+
+    if (status.burned) {
+      animate.effect.condition('burned', pokemon.runtimeId || pokemon.id).catch(console.warn);
+    }
+
+    if (status.confused) {
+      animate.effect.condition('confused', pokemon.runtimeId || pokemon.id).catch(console.warn);
+    }
+
+    if (status.asleep) {
+      animate.effect.condition('asleep', pokemon.runtimeId || pokemon.id).catch(console.warn);
+    }
+
+    if (status.paralyzed) {
+      animate.effect.condition('paralyzed', pokemon.runtimeId || pokemon.id).catch(console.warn);
+    }
+
+    // きぜつチェック
+    if (result.pokemon.damage >= result.pokemon.hp) {
+      noop(`⚠️ ${result.pokemon.name_ja} was knocked out by status conditions!`);
+      newState = Logic.checkForKnockout(newState, playerId);
     }
 
     return newState;
@@ -1013,7 +1049,7 @@ export class TurnManager {
    * カードドローアニメーション
    */
   async animateCardDraw(playerId) {
-    const handElement = playerId === 'player' 
+    const handElement = playerId === 'player'
       ? document.getElementById('player-hand')
       : document.getElementById('cpu-hand');
 
@@ -1042,7 +1078,7 @@ export class TurnManager {
     const thinkTime = baseTime || (
       Math.random() * (this.cpuThinkingTime.max - this.cpuThinkingTime.min) + this.cpuThinkingTime.min
     );
-    
+
     await new Promise(resolve => setTimeout(resolve, thinkTime));
   }
 
@@ -1059,33 +1095,36 @@ export class TurnManager {
    */
   async handleNewActiveSelection(state, benchIndex) {
     let newState = Logic.promoteToActive(state, state.playerToAct, benchIndex);
-    
+
     if (newState !== state) {
       // Add promotion animation for both player and CPU
       const playerId = state.playerToAct;
       const promotedPokemon = newState.players[playerId].active;
-      
+
       if (promotedPokemon) {
         // Create promotion animation with new API
-      try {
-        const { animateFlow } = await import('./animations/flow.js');
-        await animateFlow.benchToActive(playerId, benchIndex, { isNewActiveSelection: true });
-      } catch (e) {
-        console.warn('Promotion animation failed:', e);
+        // ✅ flow.js削除: animate.cardMoveを使用
+        try {
+          await animate.cardMove(playerId, promotedPokemon.id, 'bench->active', {
+            benchIndex: benchIndex,
+            card: promotedPokemon
+          });
+        } catch (e) {
+          console.warn('Promotion animation failed:', e);
+        }
       }
-      }
-      
+
       // Clear knockout context and reset phase
       newState = Logic.clearKnockoutContext(newState);
-      
+
       // Check for winner
       newState = Logic.checkForWinner(newState);
-      
+
       if (newState.phase !== GAME_PHASES.GAME_OVER) {
         // Check if this was caused by an attack that should end the turn
         if (newState.attackCausedKnockout && newState.knockoutAttacker) {
           const attacker = newState.knockoutAttacker;
-          
+
           // End the attacker's turn
           if (attacker === 'player') {
             newState = this.endPlayerTurn(newState);
@@ -1103,14 +1142,14 @@ export class TurnManager {
           }
         }
       }
-      
+
       newState = addLogEntry(newState, {
         type: 'pokemon_promoted',
         player: playerId,
         message: `${playerId === 'player' ? 'あなた' : '相手'}は${promotedPokemon.name_ja}をバトル場に出しました。`
       });
     }
-    
+
     return newState;
   }
 
@@ -1121,30 +1160,33 @@ export class TurnManager {
     if (!state.needsCpuAutoSelect) {
       return state;
     }
-    
+
     await this.simulateCpuThinking(800);
-    
+
     let newState = Logic.cpuAutoSelectNewActive(state);
-    
+
     // Add CPU selection animation with new API
     const cpuActive = newState.players.cpu.active;
     if (cpuActive) {
+      // ✅ flow.js削除: animate.cardMoveを使用
       try {
-        const { animateFlow } = await import('./animations/flow.js');
         // benchIndex を再特定
         const idx = newState.players.cpu.bench.findIndex(p => p && (p.runtimeId === cpuActive.runtimeId || p.id === cpuActive.id));
-        await animateFlow.benchToActive('cpu', Math.max(0, idx), { isNewActiveSelection: true, isCpuAutoSelect: true });
+        await animate.cardMove('cpu', cpuActive.id, 'bench->active', {
+          benchIndex: Math.max(0, idx),
+          card: cpuActive
+        });
       } catch (e) {
         console.warn('CPU auto promote animation failed:', e);
       }
     }
-    
+
     // Set appropriate phase after CPU selection
     if (newState.phase !== GAME_PHASES.GAME_OVER) {
       // Check if this was caused by an attack that should end the turn
       if (newState.attackCausedKnockout && newState.knockoutAttacker) {
         const attacker = newState.knockoutAttacker;
-        
+
         // End the attacker's turn
         if (attacker === 'player') {
           newState = this.endPlayerTurn(newState);
@@ -1161,7 +1203,7 @@ export class TurnManager {
         }
       }
     }
-    
+
     return newState;
   }
 
@@ -1170,10 +1212,10 @@ export class TurnManager {
    */
   extractEnergyType(energyTypeOrId) {
     if (!energyTypeOrId) return 'colorless';
-    
+
     const energyTypes = ['fire', 'water', 'grass', 'lightning', 'psychic', 'fighting', 'darkness', 'metal'];
     const lowerInput = energyTypeOrId.toLowerCase();
-    
+
     return energyTypes.find(type => lowerInput.includes(type)) || 'colorless';
   }
 
