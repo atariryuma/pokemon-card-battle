@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ポケモンカード エディタ</title>
-  <link rel="stylesheet" href="/src/styles/z-index-vars.css">
   <style>
     :root {
       --bg: #0f1226;
@@ -572,8 +571,7 @@
           const [type, value] = tok.split(':').map(t=>t.trim());
           return { type, value };
         }) : undefined;
-        const resStr = byId('resistance').value.trim();
-        const resistance = resStr ? (()=>{ const [type,value] = resStr.split(':').map(s=>s.trim()); return { type, value }; })() : undefined;
+        const resistance = parseResistanceFieldInput(byId('resistance').value);
 
         obj = {
           ...base,
@@ -731,6 +729,35 @@
       return '';
     }
 
+    function normalizeResistanceField(rawResistance){
+      if (!rawResistance) return undefined;
+      const source = Array.isArray(rawResistance) ? rawResistance[0] : rawResistance;
+      if (!source || typeof source !== 'object') return undefined;
+
+      const type = String(source.type ?? '').trim();
+      const value = String(source.value ?? '').trim();
+      if (!type || type.toLowerCase() === 'none') return undefined;
+      if (!value || value.toLowerCase() === 'undefined') return undefined;
+
+      return { type, value };
+    }
+
+    function formatResistanceFieldInput(rawResistance){
+      const resistance = normalizeResistanceField(rawResistance);
+      return resistance ? `${resistance.type}:${resistance.value}` : '';
+    }
+
+    function parseResistanceFieldInput(inputValue){
+      const raw = String(inputValue || '').trim();
+      if (!raw) return undefined;
+      const normalized = raw.replace(/：/g, ':');
+      const [typePart, ...valueParts] = normalized.split(':');
+      return normalizeResistanceField({
+        type: typePart,
+        value: valueParts.join(':')
+      });
+    }
+
     function selectByFilteredIndex(fi){
       const card = filtered[fi];
       const absoluteIndex = cards.findIndex(c => c === card);
@@ -757,7 +784,7 @@
       byId('types').value = (c.types||[]).join(',');
       byId('rule_box').value = c.rule_box || '';
       byId('weakness').value = (c.weakness||[]).map(w=>`${w.type}:${w.value}`).join('; ');
-      byId('resistance').value = c.resistance? `${c.resistance.type}:${c.resistance.value}` : '';
+      byId('resistance').value = formatResistanceFieldInput(c.resistance);
       byId('retreat_cost').value = c.retreat_cost ?? '';
       byId('ability_name').value = c.ability?.name_ja || '';
       byId('ability_text').value = [c.ability?.text_ja||'', c.ability?.text_en||''].filter((x,i)=>x&&(i<2)).join(' / ');
@@ -1048,6 +1075,10 @@
         if (out.stage === 'BASIC') out.stage = 'Basic';
         if (out.stage === 'STAGE1') out.stage = 'Stage1';
         if (out.stage === 'STAGE2') out.stage = 'Stage2';
+        // resistance normalize
+        const normalizedResistance = normalizeResistanceField(out.resistance);
+        if (normalizedResistance) out.resistance = normalizedResistance;
+        else delete out.resistance;
         // ability effect_* -> text_*
         if (out.ability && (out.ability.effect_en || out.ability.effect_ja)) {
           out.ability = {
