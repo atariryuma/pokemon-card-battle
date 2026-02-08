@@ -76,7 +76,9 @@ export class View {
         this.statusMessage = document.getElementById('status-message');
         this.phaseIndicator = document.getElementById('phase-indicator');
         this.turnIndicator = document.getElementById('turn-indicator');
-        this.currentPlayer = document.getElementById('current-player');
+        this.currentPlayer = document.getElementById('current-player') || document.getElementById('turn-player');
+        this.battleLogList = document.getElementById('battle-log-list');
+        this.lastBattleLogSignature = '';
         // confirmSetupButton は getter で管理されているため、ここでは設定しない
         this.initialPokemonSelectionUI = document.getElementById('initial-pokemon-selection');
 
@@ -1674,6 +1676,51 @@ export class View {
         if (state.prompt?.message) {
             this.showGameMessage(state.prompt.message);
         }
+
+        // バトルログ更新
+        this._updateBattleLog(state);
+    }
+
+    _updateBattleLog(state) {
+        if (!this.battleLogList) return;
+
+        const logs = Array.isArray(state?.log) ? state.log : [];
+        const recentLogs = logs.slice(-8).reverse();
+        const signature = recentLogs
+            .map(entry => `${entry?.timestamp ?? ''}:${entry?.turn ?? ''}:${entry?.message ?? ''}`)
+            .join('|');
+
+        if (signature === this.lastBattleLogSignature) return;
+        this.lastBattleLogSignature = signature;
+
+        this.battleLogList.innerHTML = '';
+
+        if (recentLogs.length === 0) {
+            const empty = document.createElement('li');
+            empty.className = 'battle-log-empty';
+            empty.textContent = 'ログはまだありません';
+            this.battleLogList.appendChild(empty);
+            return;
+        }
+
+        const fragment = document.createDocumentFragment();
+        recentLogs.forEach((entry) => {
+            const item = document.createElement('li');
+            item.className = 'battle-log-item';
+
+            const turn = document.createElement('span');
+            turn.className = 'battle-log-turn';
+            turn.textContent = `T${entry?.turn ?? '-'}`;
+
+            const message = document.createElement('span');
+            message.textContent = entry?.message || 'アクション記録なし';
+
+            item.appendChild(turn);
+            item.appendChild(message);
+            fragment.appendChild(item);
+        });
+
+        this.battleLogList.appendChild(fragment);
     }
 
     updateSetupProgress(state) {

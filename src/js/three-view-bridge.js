@@ -543,11 +543,22 @@ export class ThreeViewBridge {
 
     /**
      * 指定ゾーン・オーナーのスロットをハイライト
+     * @param {string} zone
+     * @param {string} owner
+     * @param {number|null} index
+     * @param {{onlyEmpty?: boolean, onlyOccupied?: boolean}} options
+     */
+    highlightSlotsByZone(zone, owner, index = null, options = {}) {
+        if (this.gameBoard3D) {
+            this.gameBoard3D.highlightSlotsByZone(zone, owner, index, options);
+        }
+    }
+
+    /**
+     * 互換API: index/filterなしでゾーン全体をハイライト
      */
     highlightSlots(zone, owner) {
-        if (this.gameBoard3D) {
-            this.gameBoard3D.highlightSlotsByZone(zone, owner);
-        }
+        this.highlightSlotsByZone(zone, owner);
     }
 
     /**

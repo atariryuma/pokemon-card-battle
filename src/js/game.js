@@ -1181,18 +1181,24 @@ export class Game {
         if (!card) return;
 
         if (targetZone === 'bench' && card.stage === 'BASIC') {
-            const newState = this.turnManager.handlePlayerMainPhase(this.state, 'place_basic', {
-                cardId: card.id,
-                benchIndex: parseInt(targetIndex, 10)
-            });
-            this._updateState(newState);
-            this.view.showSuccessMessage(`${card.name_ja}をベンチに配置しました`);
+            const benchIndex = parseInt(targetIndex, 10);
+            let newState = Logic.placeCardOnBench(this.state, 'player', card.runtimeId || card.id, benchIndex);
+            if (newState !== this.state) {
+                newState = addLogEntry(newState, { message: `${card.name_ja}をベンチに配置しました。` });
+                this._updateState(newState);
+                this.view.showSuccessMessage(`${card.name_ja}をベンチに配置しました`);
+            } else {
+                this.view.showErrorMessage('そのベンチには配置できません');
+            }
         } else if (targetZone === 'active' && card.stage === 'BASIC' && !this.state.players.player.active) {
-            const newState = this.turnManager.handlePlayerMainPhase(this.state, 'place_active', {
-                cardId: card.id
-            });
-            this._updateState(newState);
-            this.view.showSuccessMessage(`${card.name_ja}をバトル場に配置しました`);
+            let newState = Logic.placeCardInActive(this.state, 'player', card.runtimeId || card.id);
+            if (newState !== this.state) {
+                newState = addLogEntry(newState, { message: `${card.name_ja}をバトル場に配置しました。` });
+                this._updateState(newState);
+                this.view.showSuccessMessage(`${card.name_ja}をバトル場に配置しました`);
+            } else {
+                this.view.showErrorMessage('バトル場には配置できません');
+            }
         } else if (targetZone === 'active' && !this.state.players.player.active) {
             this.view.showError('INVALID_INITIAL_POKEMON');
         } else {
@@ -1288,13 +1294,11 @@ export class Game {
                 // ✅ FIX Bug #2: Use 'supertype' instead of 'card_type' (data-manager.js maps card_type → supertype)
                 if (card && card.supertype === 'Pokémon' && card.stage === 'BASIC') {
                     this.selectedCardForSetup = card;
+                    this._clearAllHighlights();
                     // ✅ 選択時は'select'タイプでハイライト
                     this._highlightCard(card.runtimeId || card.id, true, { type: 'select' });
-                    // Three.js版: 配置可能スロットをハイライト
-                    if (this.view.threeViewBridge?.isActive()) {
-                        this.view.threeViewBridge.highlightSlots('active', 'player');
-                        this.view.threeViewBridge.highlightSlots('bench', 'player');
-                    }
+                    // 配置可能スロットをハイライト（Three.js/DOM両対応）
+                    this._highlightBasicPlacementTargets();
                     this.state.prompt.message = `「${card.name_ja}」をバトル場かベンチに配置してください。`;
                     this.view.updateStatusMessage(this.state.prompt.message);
                 } else if (card && card.supertype === 'Pokémon') {
@@ -1772,6 +1776,8 @@ export class Game {
         // ペンディングアクション表示
         if (this.state.pendingAction && this.state.pendingAction.type === 'attach-energy') {
             this.view.showGameMessage('エネルギーをつけるポケモンを選んでください。');
+        } else if (this.state.pendingAction && this.state.pendingAction.type === 'place-basic') {
+            this.view.showGameMessage('配置先のスロットを選んでください。');
         }
     }
 
@@ -1783,27 +1789,7 @@ export class Game {
         if (!card) return;
 
         if (card.card_type === 'Pokémon' && card.stage === 'BASIC') {
-            // たねポケモンをベンチに出す - 既存のカード情報システムを活用
-            const cardInfoHtml = this._generateBenchPlacementModal(card);
-            await this.view.showInteractiveMessage(
-                cardInfoHtml,
-                [
-                    { text: 'はい', callback: () => this._placeOnBench(card.runtimeId || card.id) },
-                    { text: 'いいえ', callback: () => { } }
-                ],
-                'central',
-                true // allowHtml = true
-            );
-
-            // XSS対策: 画像エラーハンドリング
-            setTimeout(() => {
-                const img = document.querySelector('.bench-placement-card-image');
-                if (img) {
-                    img.addEventListener('error', function () {
-                        this.src = 'assets/ui/card_back.webp';
-                    });
-                }
-            }, 0);
+            await this._startBasicPlacementSelection(card.runtimeId || card.id);
         } else if (card.card_type === 'Basic Energy' || card.card_type === 'Energy') {
             // エネルギーを付ける
             if (this.state.turnState?.energyAttached > 0) {
@@ -1846,6 +1832,76 @@ export class Game {
     }
 
     /**
+     * たねポケモン配置アクションを開始（同じカード再クリックでキャンセル）
+     * @param {string} cardId - runtimeId優先（互換でmaster id可）
+     */
+    async _startBasicPlacementSelection(cardId) {
+        const card = this.state.players.player.hand.find(c => (c.runtimeId === cardId) || (c.id === cardId));
+        if (!card || card.card_type !== 'Pokémon' || card.stage !== 'BASIC') return;
+
+        const pending = this.state.pendingAction;
+        const sourceRuntimeId = card.runtimeId || card.id;
+        const sourceMasterId = card.id;
+        const hasEmptyBench = this.state.players.player.bench.some(slot => slot === null);
+        const canPlaceActive = !this.state.players.player.active;
+
+        if (!canPlaceActive && !hasEmptyBench) {
+            this.view.showWarning('BENCH_FULL');
+            return;
+        }
+
+        // 同じカードを再クリックしたらキャンセル
+        if (pending?.type === 'place-basic' && pending.sourceCardRuntimeId === sourceRuntimeId) {
+            this.state.pendingAction = null;
+            this.state.prompt.message = 'あなたのターンです。アクションを選択してください。';
+            this._clearAllHighlights();
+            this._updateState(this.state);
+            this._showMainPhaseButtons();
+            return;
+        }
+
+        // 別アクション中は一旦クリア
+        this._clearAllHighlights();
+
+        this.state.pendingAction = {
+            type: 'place-basic',
+            sourceCardRuntimeId: sourceRuntimeId,
+            sourceCardMasterId: sourceMasterId,
+        };
+        this.state.prompt.message = `「${card.name_ja}」の配置先を選んでください。`;
+        this._updateState(this.state);
+
+        // 選択中カード + 配置可能スロットを可視化
+        this._highlightCard(sourceRuntimeId, true, { type: 'select' });
+        this._highlightBasicPlacementTargets();
+    }
+
+    /**
+     * ペンディング中のたねポケモン配置を実行
+     * @param {'active'|'bench'} targetZone
+     * @param {number|string} targetIndex
+     */
+    async _placePendingBasicPokemon(targetZone, targetIndex) {
+        const pending = this.state.pendingAction;
+        if (!pending || pending.type !== 'place-basic') return;
+
+        const sourceRuntimeId = pending.sourceCardRuntimeId;
+        const handBefore = this.state.players.player.hand.length;
+
+        await this._handlePokemonDrop(sourceRuntimeId, targetZone, targetIndex);
+
+        const handAfter = this.state.players.player.hand.length;
+        const wasPlaced = handAfter < handBefore;
+        if (!wasPlaced) return;
+
+        this.state.pendingAction = null;
+        this.state.prompt.message = 'あなたのターンです。アクションを選択してください。';
+        this._clearAllHighlights();
+        this._updateState(this.state);
+        this._showMainPhaseButtons();
+    }
+
+    /**
      * ボード上のポケモンクリック処理
      */
     async _handleBoardPokemonClick(pokemonId, zone, index) {
@@ -1854,54 +1910,6 @@ export class Game {
             await this._attachEnergy(this.state.pendingAction.sourceCardId, pokemonId);
         }
         // その他のインタラクションは今後実装
-    }
-
-    /**
-     * ベンチ配置確認用モーダルのHTMLを生成（view.jsのカード情報システムを活用）
-     */
-    _generateBenchPlacementModal(card) {
-        // カード画像部分
-        const imageHtml = `
-            <div class="flex-shrink-0 w-48 max-w-[35%]">
-                <img src="${this._getCardImagePath(card)}"
-                     alt="${card.name_ja}"
-                     class="w-full h-auto max-h-72 object-contain rounded-md border border-gray-700 bench-placement-card-image" />
-            </div>
-        `;
-
-        // カード詳細情報部分（view.jsのメソッドを活用）
-        const cardInfoHtml = this.view._generateCardInfoHtml(card);
-        const detailsHtml = `
-            <div class="flex-grow text-left text-[13px] leading-snug space-y-2 min-w-0 overflow-hidden">
-                ${cardInfoHtml}
-            </div>
-        `;
-
-        // 確認メッセージ
-        const confirmationHtml = `
-            <div class="mt-4 pt-3 border-t border-gray-600 text-center">
-                <p class="text-white font-bold text-base mb-2">「${card.name_ja}」をベンチに出しますか？</p>
-                <p class="text-gray-400 text-sm">一度ベンチに出すとバトル場以外では取り下げることはできません。</p>
-            </div>
-        `;
-
-        // 全体のレイアウト
-        return `
-            <div class="flex flex-col md:flex-row gap-4 items-start max-w-full overflow-hidden">
-                ${imageHtml}
-                ${detailsHtml}
-            </div>
-            ${confirmationHtml}
-        `;
-    }
-
-    /**
-     * カード画像パスを取得（View層と統一）
-     */
-    _getCardImagePath(card) {
-        // data-manager.jsのgetCardImagePath関数と同じロジック
-        const { getCardImagePath } = window;
-        return getCardImagePath ? getCardImagePath(card.name_en, card) : 'assets/ui/card_back.webp';
     }
 
     /**
@@ -1916,6 +1924,12 @@ export class Game {
             }
         } else if (this.state.pendingAction.type === 'retreat-promote' && zone === 'bench') {
             await this._performRetreat(parseInt(index, 10));
+        } else if (this.state.pendingAction.type === 'place-basic') {
+            if (zone === 'hand' && cardId) {
+                await this._startBasicPlacementSelection(cardId);
+            } else if (zone === 'active' || zone === 'bench') {
+                await this._placePendingBasicPokemon(zone, index);
+            }
         }
     }
 
@@ -2179,6 +2193,11 @@ export class Game {
         // エネルギー付与のペンディングがある場合は警告を表示
         if (this.state.pendingAction && this.state.pendingAction.type === 'attach-energy') {
             this.view.showError('ENERGY_SELECTED_NO_TARGET');
+            return;
+        }
+
+        if (this.state.pendingAction && this.state.pendingAction.type === 'place-basic') {
+            this.view.showCustomToast('選択中のたねポケモンの配置先を先に選んでください。', 'warning');
             return;
         }
 
@@ -3742,13 +3761,10 @@ export class Game {
      * @param {Object} options - オプション { type: 'highlight'|'select' }
      */
     _highlightCard(cardId, highlight = true, options = {}) {
-        // ✅ Three.js専用: Three.jsハイライトシステムを使用
+        // ✅ Three.js専用: 選択状態 + ハイライト状態を明示的に切替
         if (this.view?.threeViewBridge) {
-            if (highlight) {
-                this.view.threeViewBridge.highlightCard?.(cardId);
-            } else {
-                this.view.threeViewBridge.clearCardHighlight?.(cardId);
-            }
+            this.view.threeViewBridge.setCardSelected?.(cardId, highlight);
+            this.view.threeViewBridge.setCardHighlighted?.(cardId, highlight);
         }
     }
 
@@ -3758,28 +3774,36 @@ export class Game {
     _highlightEnergyTargets(energyType) {
         const player = this.state.players.player;
 
-        // ✅ Three.js専用: スロットハイライトシステムを使用
-        if (!this.view?.threeViewBridge) return;
+        const bridge = this.view?.threeViewBridge;
+        const bridgeActive = !!bridge?.isActive?.();
 
         // アクティブポケモンをチェック
         if (player.active && Logic.canUseEnergy(player.active, energyType)) {
-            // Three.jsでアクティブスロットをハイライト
-            this.view.threeViewBridge.highlightSlotsByZone?.('active', 'player');
+            if (bridgeActive) {
+                // Three.jsでアクティブスロットをハイライト
+                bridge.highlightSlotsByZone?.('active', 'player', 0, { onlyOccupied: true });
+            } else {
+                document.querySelector('.active-bottom')?.classList.add('energy-target-highlight');
+            }
 
             // カードもハイライト
             const runtimeId = player.active.runtimeId || player.active.id;
-            this.view.threeViewBridge.setCardHighlighted?.(runtimeId, true);
+            bridge?.setCardHighlighted?.(runtimeId, true);
         }
 
         // ベンチポケモンをチェック
         player.bench.forEach((pokemon, index) => {
             if (pokemon && Logic.canUseEnergy(pokemon, energyType)) {
-                // Three.jsでベンチスロットをハイライト
-                this.view.threeViewBridge.highlightSlotsByZone?.('bench', 'player', index);
+                if (bridgeActive) {
+                    // Three.jsでベンチスロットをハイライト
+                    bridge.highlightSlotsByZone?.('bench', 'player', index, { onlyOccupied: true });
+                } else {
+                    document.querySelector(`.bottom-bench-${index + 1}`)?.classList.add('energy-target-highlight');
+                }
 
                 // カードもハイライト
                 const runtimeId = pokemon.runtimeId || pokemon.id;
-                this.view.threeViewBridge.setCardHighlighted?.(runtimeId, true);
+                bridge?.setCardHighlighted?.(runtimeId, true);
             }
         });
     }
@@ -3788,19 +3812,51 @@ export class Game {
      * ベンチスロットハイライト（Three.js専用）
      */
     _highlightBenchSlots() {
-        // ✅ Three.js専用: 全ベンチスロットをハイライト
-        if (this.view?.threeViewBridge) {
-            this.view.threeViewBridge.highlightSlotsByZone?.('bench', 'player');
+        const bridge = this.view?.threeViewBridge;
+        const bridgeActive = !!bridge?.isActive?.();
 
-            // 既にカードが配置されているベンチポケモンもハイライト
-            const player = this.state.players.player;
-            player.bench.forEach((pokemon, index) => {
-                if (pokemon) {
-                    const runtimeId = pokemon.runtimeId || pokemon.id;
-                    this.view.threeViewBridge.setCardHighlighted?.(runtimeId, true);
-                }
-            });
+        const player = this.state.players.player;
+        if (bridgeActive) {
+            // Three.js: 退避先として使えるベンチ（占有スロットのみ）をハイライト
+            bridge.highlightSlotsByZone?.('bench', 'player', null, { onlyOccupied: true });
         }
+
+        player.bench.forEach((pokemon, index) => {
+            if (!pokemon) return;
+            if (bridgeActive) {
+                const runtimeId = pokemon.runtimeId || pokemon.id;
+                bridge.setCardHighlighted?.(runtimeId, true);
+            } else {
+                document.querySelector(`.bottom-bench-${index + 1}`)?.classList.add('slot-highlight');
+            }
+        });
+    }
+
+    /**
+     * たねポケモン配置可能スロットをハイライト
+     */
+    _highlightBasicPlacementTargets() {
+        const bridge = this.view?.threeViewBridge;
+        const bridgeActive = !!bridge?.isActive?.();
+
+        const player = this.state.players.player;
+        if (!player.active) {
+            if (bridgeActive) {
+                bridge.highlightSlotsByZone?.('active', 'player', 0, { onlyEmpty: true });
+            } else {
+                document.querySelector('.active-bottom')?.classList.add('slot-highlight');
+            }
+        }
+
+        player.bench.forEach((pokemon, index) => {
+            if (!pokemon) {
+                if (bridgeActive) {
+                    bridge.highlightSlotsByZone?.('bench', 'player', index, { onlyEmpty: true });
+                } else {
+                    document.querySelector(`.bottom-bench-${index + 1}`)?.classList.add('slot-highlight');
+                }
+            }
+        });
     }
 
     /**
@@ -3811,7 +3867,14 @@ export class Game {
         if (this.view?.threeViewBridge) {
             this.view.threeViewBridge.clearHighlights();
             this.view.threeViewBridge.clearAllCardHighlights();
+            this.view.threeViewBridge.clearAllCardSelections();
         }
+
+        // DOMフォールバック用ハイライト解除
+        document.querySelectorAll('.slot-highlight, .energy-target-highlight, .attack-target-highlight')
+            .forEach(el => {
+                el.classList.remove('slot-highlight', 'energy-target-highlight', 'attack-target-highlight');
+            });
     }
 
     /**

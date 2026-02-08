@@ -491,12 +491,28 @@ export class GameBoard3D {
 
     /**
      * 指定ゾーン・オーナーのスロットをハイライト
+     * @param {string} zone
+     * @param {string} owner
+     * @param {number|null} index
+     * @param {{onlyEmpty?: boolean, onlyOccupied?: boolean}} options
      */
-    highlightSlotsByZone(zone, owner) {
-        this.slots.forEach((slot, key) => {
-            if (key.startsWith(`${zone}-${owner}`)) {
-                slot.setHighlighted(true);
+    highlightSlotsByZone(zone, owner, index = null, options = {}) {
+        const { onlyEmpty = false, onlyOccupied = false } = options;
+
+        this.slots.forEach((slot) => {
+            const slotUserData = slot.getMesh()?.userData;
+            if (!slotUserData) return;
+            if (slotUserData.zone !== zone || slotUserData.owner !== owner) return;
+
+            if (index !== null && Number(slotUserData.index) !== Number(index)) {
+                return;
             }
+
+            const occupied = this._isSlotOccupied(slotUserData.zone, slotUserData.owner, slotUserData.index);
+            if (onlyEmpty && occupied) return;
+            if (onlyOccupied && !occupied) return;
+
+            slot.setHighlighted(true);
         });
     }
 
@@ -505,6 +521,26 @@ export class GameBoard3D {
      */
     clearAllHighlights() {
         this.slots.forEach(slot => slot.setHighlighted(false));
+    }
+
+    /**
+     * スロットにカードが存在するか判定
+     * @param {string} zone
+     * @param {string} owner
+     * @param {number} index
+     * @returns {boolean}
+     */
+    _isSlotOccupied(zone, owner, index) {
+        for (const cardEntry of this.cards.values()) {
+            if (cardEntry instanceof Promise) continue;
+            const mesh = cardEntry?.getMesh?.();
+            const userData = mesh?.userData;
+            if (!userData || userData.type !== 'card') continue;
+            if (userData.zone !== zone || userData.owner !== owner) continue;
+            if (Number(userData.index) !== Number(index)) continue;
+            return true;
+        }
+        return false;
     }
 
     /**

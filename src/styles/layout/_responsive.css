@@ -106,7 +106,8 @@
 
     #player-hand-container {
         height: clamp(120px, 18vh, 160px);
-        margin-bottom: 8px;
+        margin-bottom: 0;
+        width: min(98vw, 1200px);
     }
 
     #game-status-panel {
