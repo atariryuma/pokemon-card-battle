@@ -255,7 +255,14 @@
             const cardEditorButton = document.getElementById('card-editor-button-float');
             if (cardEditorButton) {
                 cardEditorButton.addEventListener('click', () => {
-                    window.location.href = 'card_viewer.html';
+                    const editorUrl = 'card_viewer.html';
+                    const editorWindow = window.open(editorUrl, '_blank', 'noopener,noreferrer');
+                    if (!editorWindow) {
+                        const shouldNavigate = window.confirm('カードエディタを新しいタブで開けませんでした。現在のタブで開くとゲーム進行状況が失われます。開きますか？');
+                        if (shouldNavigate) {
+                            window.location.href = editorUrl;
+                        }
+                    }
                 });
             }
 

@@ -1020,8 +1020,16 @@ export class Game {
      */
     async _handleCardEditor() {
         noop('🎴 Card Editor button clicked');
-        // カードエディタページへのリダイレクト
-        window.location.href = 'card_viewer.html';
+        const editorUrl = 'card_viewer.html';
+        const editorWindow = window.open(editorUrl, '_blank', 'noopener,noreferrer');
+
+        // ポップアップが遮断された場合のみ、確認して同一タブ遷移する
+        if (!editorWindow) {
+            const shouldNavigate = window.confirm('カードエディタを新しいタブで開けませんでした。現在のタブで開くとゲーム進行状況が失われます。開きますか？');
+            if (shouldNavigate) {
+                window.location.href = editorUrl;
+            }
+        }
     }
 
     /**
